@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LeLibrary for Jellyfin</title>
+<meta name="description" content="Your debrid library as a real Jellyfin library, matched and named the LeLibrary way." />
+<style>
+  :root {
+    --bg: #0d0f14;
+    --panel: #151922;
+    --panel-2: #1b202b;
+    --ink: #e8ecf4;
+    --muted: #9aa4b5;
+    --line: #262c39;
+    --accent: #f5b32c;
+    --accent-ink: #221a05;
+    --ok: #3ddc97;
+    --warn: #f5b32c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 15% -10%, #1c2230 0%, var(--bg) 55%) fixed;
+    color: var(--ink);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 22px; }
+  header.top {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(13, 15, 20, 0.86);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .top-inner { display: flex; align-items: center; gap: 18px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.2px; }
+  .brand img { width: 28px; height: 28px; border-radius: 7px; }
+  nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+  nav a {
+    color: var(--muted); padding: 8px 12px; border-radius: 9px; font-size: 14px; font-weight: 600;
+  }
+  nav a:hover { color: var(--ink); background: var(--panel); text-decoration: none; }
+  nav a.active { color: var(--ink); background: var(--panel-2); }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.3px;
+    padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--muted); background: var(--panel);
+  }
+  .pill.ok { color: #0c1a12; background: var(--ok); border-color: transparent; }
+  .pill.soon { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
+  main { padding: 46px 0 70px; }
+  h1 { font-size: 40px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -0.5px; }
+  h2 { font-size: 22px; margin: 42px 0 12px; letter-spacing: -0.2px; }
+  h3 { font-size: 17px; margin: 24px 0 6px; }
+  p { margin: 0 0 14px; color: #cdd5e3; }
+  .lede { font-size: 19px; color: var(--muted); max-width: 720px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 22px; margin: 18px 0;
+  }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .grid .card { margin: 0; }
+  .kicker { text-transform: uppercase; letter-spacing: 1.4px; font-size: 11px; color: var(--muted); font-weight: 700; }
+  code, .url {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 14px;
+    background: #0a0c11; border: 1px solid var(--line); border-radius: 8px;
+    padding: 2px 7px; color: #dfe6f3;
+  }
+  .url { display: block; padding: 12px 14px; overflow-x: auto; white-space: nowrap; margin: 10px 0; }
+  ol, ul { margin: 8px 0 16px; padding-left: 22px; color: #cdd5e3; }
+  li { margin: 7px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px; }
+  .note { border-left: 3px solid var(--accent); padding: 10px 0 10px 14px; color: #d8c79a; }
+  footer { border-top: 1px solid var(--line); padding: 24px 0 40px; color: var(--muted); font-size: 14px; }
+  @media (max-width: 560px) {
+    h1 { font-size: 30px; }
+    .top-inner { height: auto; padding: 10px 0; flex-wrap: wrap; }
+    nav { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-inner">
+    <div class="brand"><img src="thumb.png" alt="" />LeLibrary <span class="pill">for Jellyfin</span></div>
+    <nav>
+      <a href="index.html" class="active">Home</a>
+      <a href="jellyfin.html">Jellyfin</a>
+      <a href="manifest.json">Plugin repository</a>
+      <a href="https://github.com/LeLibrary/LeLibrary-Jellyfin">Source</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <h1>Your debrid library,<br />inside Jellyfin.</h1>
+  <p class="lede">
+    LeLibrary already decides which titles belong in your library and what they are called.
+    This plugin puts that same library into Jellyfin: real posters, real seasons, real playback,
+    and nothing downloaded until you press play.
+  </p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="kicker">Status</div>
+      <h3 style="margin-top:6px">Version 0.1</h3>
+      <p><span class="pill ok">TorBox</span> <span class="pill soon">Real-Debrid next</span></p>
+      <p style="color:var(--muted);font-size:14px">Built and tested against Jellyfin 12. Not for 10.x.</p>
+    </div>
+    <div class="card">
+      <div class="kicker">Library</div>
+      <h3 style="margin-top:6px">Appears in seconds</h3>
+      <p style="color:var(--muted);font-size:14px">Items live in Jellyfin's database, so there is no file scan. 39,000 titles in about two minutes.</p>
+    </div>
+    <div class="card">
+      <div class="kicker">Playback</div>
+      <h3 style="margin-top:6px">Links minted on play</h3>
+      <p style="color:var(--muted);font-size:14px">Every play asks for a fresh link, so nothing you watch can be replayed from an old URL.</p>
+    </div>
+  </div>
+
+  <h2>Install</h2>
+  <ol>
+    <li>Dashboard → Plugins → Repositories → <strong>+</strong>, and add this URL:
+      <span class="url">https://lelibrary.github.io/LeLibrary-Jellyfin/manifest.json</span>
+    </li>
+    <li>Plugins → Catalog → <strong>LeLibrary</strong> → Install, then restart Jellyfin.</li>
+    <li>Open the plugin's settings, paste your LeLibrary setup link and your own debrid key, then press <strong>Test key</strong> and <strong>Run sync now</strong>.</li>
+    <li>The plugin creates <strong>TorBox Movies</strong> and <strong>TorBox Series</strong> itself. Nothing to add by hand.</li>
+  </ol>
+  <p><a href="jellyfin.html">Full install and settings guide →</a></p>
+
+  <h2>What it will not do</h2>
+  <table>
+    <tr><th>Not a mount</th><td>Nothing outside Jellyfin can read this library. For Infuse, rclone or an *arr stack, use a folder/mount tool instead.</td></tr>
+    <tr><th>No downloader</th><td>Nothing is fetched until something plays, and nothing is kept afterwards.</td></tr>
+    <tr><th>No search-on-demand</th><td>Only what is already in your debrid account appears. Discovery is the LeLibrary addon's job.</td></tr>
+    <tr><th>Stored releases only</th><td>A compressed or encrypted archive is left out rather than added as something that will not play.</td></tr>
+  </table>
+
+  <h2>Your key stays yours</h2>
+  <p>
+    The plugin asks for your debrid key directly and never sends it to LeLibrary. Jellyfin stores
+    plugin settings as plain XML on disk, so anyone who can read the config directory can read it -
+    protect the host or the disk. The LeLibrary setup link is written into Jellyfin, so treat it like
+    a password.
+  </p>
+</main>
+
+<footer class="wrap">
+  LeLibrary for Jellyfin · <a href="https://github.com/LeLibrary/LeLibrary-Jellyfin">source</a> ·
+  <a href="https://github.com/LeLibrary/LeLibrary-Jellyfin/issues">issues</a> ·
+  <a href="manifest.json">plugin repository</a>
+</footer>
+</body>
+</html>
