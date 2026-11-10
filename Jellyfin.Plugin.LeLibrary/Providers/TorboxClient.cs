@@ -106,11 +106,11 @@ public sealed class TorboxClient : IDebridClient
     }
 
     /// <inheritdoc />
-    public async Task<string?> MintLinkAsync(string key, CancellationToken cancellationToken)
+    public async Task<MintResult> MintAsync(string key, CancellationToken cancellationToken)
     {
         if (!PathBuilder.TryParseKey(key, out var parsed) || parsed.Provider != Provider)
         {
-            return null;
+            return MintResult.Fail(MintStatus.NotFound);
         }
 
         var url = $"v1/api/torrents/requestdl?token={Uri.EscapeDataString(_apiKey)}"
@@ -130,9 +130,14 @@ public sealed class TorboxClient : IDebridClient
                     continue;
                 }
 
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    return MintResult.Fail(MintStatus.NotFound);
+                }
+
                 if (!response.IsSuccessStatusCode)
                 {
-                    return null;
+                    return MintResult.Fail(MintStatus.Error);
                 }
 
                 var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -140,21 +145,21 @@ public sealed class TorboxClient : IDebridClient
                 var root = document.RootElement;
                 if (root.TryGetProperty("success", out var success) && success.ValueKind == JsonValueKind.False)
                 {
-                    return null;
+                    return MintResult.Fail(MintStatus.Error);
                 }
 
                 return root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.String
-                    ? data.GetString()
-                    : null;
+                    ? new MintResult(MintStatus.Ok, data.GetString())
+                    : MintResult.Fail(MintStatus.Error);
             }
             catch (Exception err) when (err is HttpRequestException or JsonException or TaskCanceledException)
             {
                 if (attempt == 0) continue;
-                return null;
+                return MintResult.Fail(MintStatus.Error);
             }
         }
 
-        return null;
+        return MintResult.Fail(MintStatus.Error);
     }
 
     /// <inheritdoc />

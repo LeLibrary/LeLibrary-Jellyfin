@@ -49,7 +49,8 @@ public class SyncRunnerTests : IDisposable
 
         public Task<ProviderListing> ListLibraryAsync(CancellationToken cancellationToken) => Task.FromResult(Listing);
 
-        public Task<string?> MintLinkAsync(string key, CancellationToken cancellationToken) => Task.FromResult<string?>(null);
+        public Task<MintResult> MintAsync(string key, CancellationToken cancellationToken)
+            => Task.FromResult(MintResult.Fail(MintStatus.Error));
 
         public Task<ProviderHealth> ProbeAsync(CancellationToken cancellationToken) => Task.FromResult(Listing.Health);
     }

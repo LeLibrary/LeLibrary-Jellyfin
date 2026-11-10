@@ -27,6 +27,30 @@ public enum ProviderHealth
 /// <param name="Size">The size in bytes.</param>
 public sealed record DebridFile(string Key, string Name, long Size);
 
+/// <summary>How a link request ended.</summary>
+public enum MintStatus
+{
+    /// <summary>A link was minted.</summary>
+    Ok,
+
+    /// <summary>The provider says the file is gone.</summary>
+    NotFound,
+
+    /// <summary>The provider failed or refused.</summary>
+    Error,
+}
+
+/// <summary>The result of minting a playback link.</summary>
+/// <param name="Status">How it ended.</param>
+/// <param name="Url">The link when Status is Ok.</param>
+public sealed record MintResult(MintStatus Status, string? Url)
+{
+    /// <summary>Gets a failed mint.</summary>
+    /// <param name="status">The failure kind.</param>
+    /// <returns>The result.</returns>
+    public static MintResult Fail(MintStatus status) => new(status, null);
+}
+
 /// <summary>The result of listing a debrid account.</summary>
 /// <param name="Health">Whether the listing can be trusted.</param>
 /// <param name="Files">Every file, keyed the way the plan keys them.</param>
@@ -53,8 +77,8 @@ public interface IDebridClient
     /// <summary>Mints a fresh playback URL for one file.</summary>
     /// <param name="key">The plan key.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The URL, or null when it cannot be minted.</returns>
-    Task<string?> MintLinkAsync(string key, CancellationToken cancellationToken);
+    /// <returns>The link, or why it could not be minted.</returns>
+    Task<MintResult> MintAsync(string key, CancellationToken cancellationToken);
 
     /// <summary>Checks the key without listing the account.</summary>
     /// <param name="cancellationToken">The cancellation token.</param>

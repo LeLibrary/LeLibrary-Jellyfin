@@ -101,9 +101,10 @@ public class TorboxClientTests
         var handler = new StubHandler().Json(r => r.RequestUri!.AbsolutePath.Contains("requestdl"),
             """{"success":true,"data":"https://cdn.torbox.app/abc"}""");
 
-        var link = await Client(handler).MintLinkAsync("torbox:1:2", CancellationToken.None);
+        var result = await Client(handler).MintAsync("torbox:1:2", CancellationToken.None);
 
-        Assert.Equal("https://cdn.torbox.app/abc", link);
+        Assert.Equal(MintStatus.Ok, result.Status);
+        Assert.Equal("https://cdn.torbox.app/abc", result.Url);
         Assert.Contains(handler.Calls, call => call.Contains("torrent_id=1") && call.Contains("file_id=2"));
     }
 
@@ -118,9 +119,10 @@ public class TorboxClientTests
                 Content = new StringContent("""{"success":true,"data":"https://cdn.torbox.app/ok"}""", Encoding.UTF8, "application/json"),
             });
 
-        var link = await Client(handler).MintLinkAsync("torbox:1:2", CancellationToken.None);
+        var result = await Client(handler).MintAsync("torbox:1:2", CancellationToken.None);
 
-        Assert.Equal("https://cdn.torbox.app/ok", link);
+        Assert.Equal(MintStatus.Ok, result.Status);
+        Assert.Equal("https://cdn.torbox.app/ok", result.Url);
         Assert.Equal(2, attempts);
     }
 
@@ -129,7 +131,9 @@ public class TorboxClientTests
     {
         var handler = new StubHandler().Json(r => r.RequestUri!.AbsolutePath.Contains("requestdl"),
             """{"success":false,"error":"DOWNLOAD_LIMIT"}""");
-        Assert.Null(await Client(handler).MintLinkAsync("torbox:1:2", CancellationToken.None));
+        var result = await Client(handler).MintAsync("torbox:1:2", CancellationToken.None);
+        Assert.Equal(MintStatus.Error, result.Status);
+        Assert.Null(result.Url);
     }
 
     [Theory]
@@ -139,7 +143,16 @@ public class TorboxClientTests
     public async Task MintRejectsKeysItCannotOwn(string key)
     {
         var handler = new StubHandler();
-        Assert.Null(await Client(handler).MintLinkAsync(key, CancellationToken.None));
+        var result = await Client(handler).MintAsync(key, CancellationToken.None);
+        Assert.Equal(MintStatus.NotFound, result.Status);
         Assert.Empty(handler.Calls);
+    }
+
+    [Fact]
+    public async Task AFileGoneFromTheAccountIsNotFound()
+    {
+        var handler = new StubHandler().Json(_ => true, "{}", HttpStatusCode.NotFound);
+        var result = await Client(handler).MintAsync("torbox:1:2", CancellationToken.None);
+        Assert.Equal(MintStatus.NotFound, result.Status);
     }
 }
