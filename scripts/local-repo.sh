@@ -30,7 +30,7 @@ for entry in "${targets[@]}"; do
   name="LeLibrary_${VERSION}_${abi}.zip"
   # Only our assembly goes in the zip: Jellyfin ships its own dependencies, and
   # packing them would shadow the server's.
-  (cd "$work" && zip -q "$OUT/$name" Jellyfin.Plugin.LeLibrary.dll)
+  (cd "$work" && zip -q "$OUT/$name" Jellyfin.Plugin.LeLibrary.dll thumb.png)
   checksum="$(md5sum "$OUT/$name" | cut -d' ' -f1)"
 
   versions_json+=$(printf '%s' "{
@@ -49,16 +49,18 @@ cat > "$OUT/manifest.json" <<EOF
     "guid": "8858565b-f937-4d4d-b081-57044455fda1",
     "name": "LeLibrary",
     "description": "Turns your debrid library into Jellyfin media folders.",
-    "overview": "LeLibrary for Jellyfin lists your debrid account through LeLibrary's matching and writes playable .strm files. Nothing is downloaded and LeLibrary never sees your key.",
+    "overview": "Your debrid library as Jellyfin libraries, matched and named the LeLibrary way. Nothing is downloaded and LeLibrary never sees your key.",
     "owner": "LeLibrary",
     "category": "General",
-    "imageUrl": "",
+    "imageUrl": "${SOURCE_BASE:-file://$OUT}/thumb.png",
     "versions": [
       ${versions_json%,}
     ]
   }
 ]
 EOF
+
+cp "$ROOT/Jellyfin.Plugin.LeLibrary/thumb.png" "$OUT/thumb.png"
 
 echo "repo written to $OUT"
 ls -l "$OUT"

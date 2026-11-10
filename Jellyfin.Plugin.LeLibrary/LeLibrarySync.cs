@@ -53,6 +53,15 @@ public sealed class LeLibrarySync
         _log = log;
     }
 
+    private static string ProviderName(string provider) => provider switch
+    {
+        "torbox" => "TorBox",
+        "realdebrid" => "Real-Debrid",
+        "alldebrid" => "AllDebrid",
+        "premiumize" => "Premiumize",
+        _ => provider,
+    };
+
     /// <summary>Runs one sync.</summary>
     /// <param name="configuration">The plugin settings.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -98,7 +107,7 @@ public sealed class LeLibrarySync
 
         var desired = VirtualItemFactory.Build(playable);
         var dataPath = Path.Combine(_paths.DataPath, "lelibrary");
-        var (movies, shows) = await _library.EnsureLibrariesAsync(dataPath, cancellationToken).ConfigureAwait(false);
+        var (movies, shows) = await _library.EnsureLibrariesAsync(dataPath, ProviderName(provider.Provider), cancellationToken).ConfigureAwait(false);
         if (movies is null || shows is null)
         {
             return new SyncOutcome(false, "the libraries could not be created", null);

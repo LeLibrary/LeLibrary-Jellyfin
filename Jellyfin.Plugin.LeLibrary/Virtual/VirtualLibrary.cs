@@ -33,11 +33,11 @@ public sealed record VirtualSyncResult(int Added, int Updated, int Removed, int 
 /// </summary>
 public sealed class VirtualLibrary
 {
-    /// <summary>Library name for movies.</summary>
-    public const string MoviesLibrary = "LeLibrary Movies";
+    /// <summary>Suffix for the movies library, after the provider name.</summary>
+    public const string MoviesSuffix = " Movies";
 
-    /// <summary>Library name for shows.</summary>
-    public const string ShowsLibrary = "LeLibrary Shows";
+    /// <summary>Suffix for the series library, after the provider name.</summary>
+    public const string SeriesSuffix = " Series";
 
     private const string AnchorFile = ".lelibrary";
 
@@ -57,12 +57,13 @@ public sealed class VirtualLibrary
     /// <param name="dataPath">The plugin's data folder.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The movies and shows folders, or nulls when one could not be made.</returns>
-    public async Task<(Folder? Movies, Folder? Shows)> EnsureLibrariesAsync(string dataPath, CancellationToken cancellationToken)
+    public async Task<(Folder? Movies, Folder? Shows)> EnsureLibrariesAsync(string dataPath, string providerName, CancellationToken cancellationToken)
     {
+        var name = string.IsNullOrWhiteSpace(providerName) ? "Debrid" : providerName.Trim();
         var moviesPath = Path.Combine(dataPath, "movies");
         var showsPath = Path.Combine(dataPath, "shows");
-        var movies = await EnsureLibraryAsync(MoviesLibrary, moviesPath, CollectionTypeOptions.movies, cancellationToken).ConfigureAwait(false);
-        var shows = await EnsureLibraryAsync(ShowsLibrary, showsPath, CollectionTypeOptions.tvshows, cancellationToken).ConfigureAwait(false);
+        var movies = await EnsureLibraryAsync(name + MoviesSuffix, moviesPath, CollectionTypeOptions.movies, cancellationToken).ConfigureAwait(false);
+        var shows = await EnsureLibraryAsync(name + SeriesSuffix, showsPath, CollectionTypeOptions.tvshows, cancellationToken).ConfigureAwait(false);
         return (movies, shows);
     }
 
