@@ -5,8 +5,52 @@ and episodes, named and matched the way LeLibrary names them.
 
 **Status: working, not yet released.** The loop is verified end to end on a
 real library (36,000+ files, movies and episodes, Range playback through
-Jellyfin). No release is tagged yet, so there is nothing to install from the
-plugin repository until one is.
+Jellyfin). No release is tagged yet, so the repository URL above is empty until
+one is.
+
+## Install
+
+1. **Add the plugin repository.** Jellyfin -> Dashboard -> Plugins ->
+   Repositories -> add this URL:
+
+   ```
+   https://lelibrary.github.io/LeLibrary-Jellyfin/manifest.json
+   ```
+
+2. **Install the plugin.** Plugins -> Catalog -> **LeLibrary** -> Install, then
+   restart Jellyfin. Jellyfin updates it from the same repository from then on.
+
+3. **Copy your LeLibrary URL.** On your LeLibrary Setup page open the
+   **Jellyfin** card: it has the repository URL and your personal setup link.
+   Copy the setup link.
+
+4. **Fill in the plugin settings.** Dashboard -> Plugins -> LeLibrary:
+
+   | Field | Value |
+   |---|---|
+   | Debrid provider | TorBox (Real-Debrid, AllDebrid and Premiumize follow) |
+   | Debrid API key | your own key |
+   | LeLibrary URL | the link from the Setup card |
+   | Library folder | `/config/lelibrary` (default) |
+   | Server URL | the address players use, e.g. `http://192.168.1.20:8096` |
+   | Sync every | 6 hours (default) |
+
+   Press **Test key**, then **Run sync now**. The first sync writes one `.strm`
+   and one `.nfo` per title or episode; on a large library that takes a minute
+   or two.
+
+5. **Add two libraries.** Jellyfin -> Dashboard -> Libraries -> Add:
+
+   - **Movies** with the folder `<Library folder>/Movies`
+   - **Shows** with the folder `<Library folder>/Shows`
+
+   The plugin keeps the two apart on purpose: one mixed library cannot type its
+   items, so movies and episodes need their own library, exactly like a normal
+   Jellyfin setup.
+
+> **No release yet?** If the catalog shows nothing, the repository has no
+> tagged build. `scripts/local-repo.sh` builds the same zip and `manifest.json`
+> locally; add that folder as a repository instead.
 
 ## How it works
 
