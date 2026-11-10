@@ -194,6 +194,7 @@ public sealed class VirtualLibrary
                         current.IndexNumber = item.Item.IndexNumber;
                         current.ParentIndexNumber = item.Item.ParentIndexNumber;
                         current.ProviderIds = item.Item.ProviderIds;
+                        current.Container = item.Item.Container;
                         await current.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, cancellationToken).ConfigureAwait(false);
                         updated++;
                     }
@@ -209,6 +210,10 @@ public sealed class VirtualLibrary
 
                 item.Item.Id = id;
                 item.Item.Path = playUrl;
+                // The container Jellyfin derives when it builds the media
+                // source. Without it a request that does not name a container
+                // cannot be answered at all.
+                item.Item.Container = ContainerOf(item.FileName);
                 item.Item.ParentId = parent.Id;
                 item.Item.DateCreated = DateTime.UtcNow;
                 item.Item.DateModified = DateTime.UtcNow;
@@ -291,8 +296,25 @@ public sealed class VirtualLibrary
             .ToDictionary(group => group.Key, group => group.First());
     }
 
+    private static string ContainerOf(string? fileName)
+    {
+        var extension = Path.GetExtension(fileName ?? string.Empty).TrimStart('.').ToLowerInvariant();
+        return extension switch
+        {
+            "mkv" => "mkv",
+            "mp4" => "mp4",
+            "m4v" => "mp4",
+            "avi" => "avi",
+            "ts" => "ts",
+            "webm" => "webm",
+            "mov" => "mov",
+            _ => "mkv",
+        };
+    }
+
     private static bool NeedsUpdate(BaseItem current, BaseItem wanted)
         => !string.Equals(current.Name, wanted.Name, StringComparison.Ordinal)
+            || !string.Equals(current.Container, wanted.Container, StringComparison.Ordinal)
             || current.ProductionYear != wanted.ProductionYear
             || current.IndexNumber != wanted.IndexNumber
             || current.ParentIndexNumber != wanted.ParentIndexNumber;
