@@ -18,15 +18,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The 10.11 build targets .NET 9 and the Jellyfin 12 build .NET 10.
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
-            9.0.x
             10.0.x
 
       - name: Test
-        run: dotnet test -c Release -f net10.0 --nologo
+        run: dotnet test -c Release --nologo
 
       - name: Build the plugin repository
         run: |

@@ -72,7 +72,7 @@ server, so its upload bandwidth is the ceiling.
 
 ## Requirements
 
-- Jellyfin 10.11 (the `net9.0` build) or Jellyfin 12 (the `net10.0` build).
+- **Jellyfin 12.** Not 10.11 and not 10.10.
 - The indexed LeLibrary library (a Postgres-backed LeLibrary instance).
 - A debrid account. TorBox is supported first; Real-Debrid, AllDebrid and
   Premiumize follow.
@@ -101,12 +101,11 @@ your library.
 
 ## Building
 
-Two SDKs are needed because Jellyfin 10.11 runs on .NET 9 and Jellyfin 12 on
-.NET 10:
+Needs the .NET 10 SDK:
 
 ```bash
-dotnet build -c Release            # both targets
-dotnet test                        # unit tests
+dotnet build -c Release
+dotnet test
 ```
 
 ## Licence
