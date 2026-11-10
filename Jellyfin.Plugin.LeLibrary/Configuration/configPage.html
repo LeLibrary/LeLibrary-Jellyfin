@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>LeLibrary</title>
+</head>
+<body>
+<div id="LeLibraryConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select">
+    <div data-role="content">
+        <div class="content-primary">
+            <form class="LeLibraryConfigForm">
+                <div class="verticalSection">
+                    <h2>LeLibrary</h2>
+                    <p class="fieldDescription">
+                        Turns your debrid library into Jellyfin media folders. Nothing is downloaded:
+                        the plugin writes playable links and Jellyfin streams straight from your account.
+                    </p>
+                </div>
+
+                <div class="selectContainer">
+                    <label class="selectLabel" for="debridProvider">Debrid provider</label>
+                    <select is="emby-select" id="debridProvider" name="Provider" class="emby-select-withcolor emby-select">
+                        <option value="torbox">TorBox</option>
+                        <option value="realdebrid">Real-Debrid</option>
+                        <option value="alldebrid">AllDebrid</option>
+                        <option value="premiumize">Premiumize</option>
+                    </select>
+                </div>
+
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="debridApiKey">Debrid API key</label>
+                    <input is="emby-input" type="password" id="debridApiKey" name="DebridApiKey" autocomplete="off" />
+                    <div class="fieldDescription">
+                        Jellyfin stores plugin settings as plain XML on disk. Anyone who can read the
+                        config directory can read this key. Protect the host or the disk.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="planUrl">LeLibrary URL</label>
+                    <input is="emby-input" type="text" id="planUrl" name="PlanUrl" autocomplete="off" />
+                    <div class="fieldDescription">
+                        The install link from your LeLibrary setup page, copied from the Jellyfin card.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="libraryPath">Library folder</label>
+                    <input is="emby-input" type="text" id="libraryPath" name="LibraryPath" autocomplete="off" />
+                    <div class="fieldDescription">
+                        Where the playable files are written. Add this folder as a Jellyfin library.
+                    </div>
+                </div>
+
+                <div class="selectContainer">
+                    <label class="selectLabel" for="syncHours">Sync every</label>
+                    <select is="emby-select" id="syncHours" name="SyncHours" class="emby-select-withcolor emby-select">
+                        <option value="1">1 hour</option>
+                        <option value="3">3 hours</option>
+                        <option value="6">6 hours</option>
+                        <option value="12">12 hours</option>
+                        <option value="24">24 hours</option>
+                    </select>
+                </div>
+
+                <div>
+                    <button is="emby-button" type="submit" class="raised button-submit block emby-button">
+                        <span>Save</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            var pluginId = '8858565b-f937-4d4d-b081-57044455fda1';
+            var page = document.querySelector('#LeLibraryConfigPage');
+            var form = page.querySelector('.LeLibraryConfigForm');
+
+            function load() {
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    form.querySelector('#debridProvider').value = config.Provider || 'torbox';
+                    form.querySelector('#debridApiKey').value = config.DebridApiKey || '';
+                    form.querySelector('#planUrl').value = config.PlanUrl || '';
+                    form.querySelector('#libraryPath').value = config.LibraryPath || '/config/lelibrary';
+                    form.querySelector('#syncHours').value = String(config.SyncHours || 6);
+                });
+            }
+
+            form.addEventListener('submit', function (event) {
+                event.preventDefault();
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    config.Provider = form.querySelector('#debridProvider').value;
+                    config.DebridApiKey = form.querySelector('#debridApiKey').value;
+                    config.PlanUrl = form.querySelector('#planUrl').value;
+                    config.LibraryPath = form.querySelector('#libraryPath').value;
+                    config.SyncHours = parseInt(form.querySelector('#syncHours').value, 10);
+                    return ApiClient.updatePluginConfiguration(pluginId, config);
+                }).then(function (result) {
+                    Dashboard.processPluginConfigurationUpdateResult(result);
+                });
+            });
+
+            load();
+        })();
+    </script>
+</div>
+</body>
+</html>

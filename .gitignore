@@ -1,0 +1,11 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.idea/
+/dist/
+/artifacts/
+/tmp/
+# local repo folders used by the Jellyfin container test
+/local-repo/
