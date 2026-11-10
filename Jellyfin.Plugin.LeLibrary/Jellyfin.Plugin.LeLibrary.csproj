@@ -10,9 +10,9 @@
     <RootNamespace>Jellyfin.Plugin.LeLibrary</RootNamespace>
     <AssemblyName>Jellyfin.Plugin.LeLibrary</AssemblyName>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <Version>0.1.5.0</Version>
-    <AssemblyVersion>0.1.5.0</AssemblyVersion>
-    <FileVersion>0.1.5.0</FileVersion>
+    <Version>0.1.6.0</Version>
+    <AssemblyVersion>0.1.6.0</AssemblyVersion>
+    <FileVersion>0.1.6.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
