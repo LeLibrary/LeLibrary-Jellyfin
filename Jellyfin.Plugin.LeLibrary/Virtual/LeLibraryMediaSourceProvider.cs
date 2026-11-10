@@ -41,13 +41,12 @@ public sealed class LeLibraryMediaSourceProvider : IMediaSourceProvider
             return Array.Empty<MediaSourceInfo>();
         }
 
-        // Mint now: a dead file is a clean empty result instead of a source that
-        // fails halfway through a stream.
-        var mint = await _links.GetAsync(key, cancellationToken).ConfigureAwait(false);
-        if (mint.Status != Providers.MintStatus.Ok)
-        {
-            return Array.Empty<MediaSourceInfo>();
-        }
+        // Never mint here. If the provider is rate limited at this moment, the
+        // item would fall back to a source with no container and refuse to
+        // stream; the resolver mints when the bytes are actually requested.
+        _ = _links;
+        _ = cancellationToken;
+        await Task.CompletedTask.ConfigureAwait(false);
 
         var container = ContainerOf(item.Path);
         return new[]
