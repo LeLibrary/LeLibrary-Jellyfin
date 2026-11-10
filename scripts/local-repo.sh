@@ -13,9 +13,8 @@ DOTNET="${DOTNET:-dotnet}"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
-# targetAbi is the Jellyfin version each build runs on, not the .NET version.
+# Jellyfin 12 only, like zurg's plugins: one target, one zip.
 targets=(
-  "net9.0:10.11.0.0"
   "net10.0:12.0.0.0"
 )
 

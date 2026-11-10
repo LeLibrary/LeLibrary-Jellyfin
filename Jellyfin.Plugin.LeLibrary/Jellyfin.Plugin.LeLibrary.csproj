@@ -1,10 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Two targets, one source tree. Jellyfin 10.11.x runs on .NET 9 and Jellyfin
-       12.x on .NET 10 (verified against the NuGet packages: 10.11.x ships
-       lib/net9.0, 12.x ships lib/net10.0). 10.10.x was the last net8.0 line. -->
+  <!-- Jellyfin 12 only, like zurg's plugins. 12.x runs on .NET 10 (the NuGet
+       package ships lib/net10.0), so one target, one build, one zip. -->
   <PropertyGroup>
-    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -16,12 +15,7 @@
     <FileVersion>0.1.0.0</FileVersion>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <PackageReference Include="Jellyfin.Controller" Version="10.11.11" />
-    <PackageReference Include="Jellyfin.Model" Version="10.11.11" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+  <ItemGroup>
     <PackageReference Include="Jellyfin.Controller" Version="12.4.0" />
     <PackageReference Include="Jellyfin.Model" Version="12.4.0" />
   </ItemGroup>
