@@ -9,6 +9,8 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Providers;
+using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
@@ -42,14 +44,18 @@ public sealed class VirtualLibrary
     private const string AnchorFile = ".lelibrary";
 
     private readonly ILibraryManager _library;
+    private readonly IProviderManager _providers;
+    private readonly IFileSystem _fileSystem;
     private readonly ILogger<VirtualLibrary> _log;
 
     /// <summary>Initializes a new instance of the <see cref="VirtualLibrary"/> class.</summary>
     /// <param name="library">The library manager.</param>
     /// <param name="log">The logger.</param>
-    public VirtualLibrary(ILibraryManager library, ILogger<VirtualLibrary> log)
+    public VirtualLibrary(ILibraryManager library, IProviderManager providers, IFileSystem fileSystem, ILogger<VirtualLibrary> log)
     {
         _library = library;
+        _providers = providers;
+        _fileSystem = fileSystem;
         _log = log;
     }
 
@@ -158,7 +164,7 @@ public sealed class VirtualLibrary
 
                 // The item's path is the play URL, not a file: Jellyfin streams
                 // a remote path as-is and never looks on disk.
-                var playUrl = $"{playBaseUrl.TrimEnd('/')}/LeLibrary/play/{item.Key}";
+                var playUrl = $"{playBaseUrl.TrimEnd('/')}/LeLibrary/play/{item.Key}/{Uri.EscapeDataString(item.FileName)}";
                 var id = _library.GetNewItemId(playUrl, item.Item.GetType());
                 byPath[item.RelativePath] = item.Item;
 
@@ -216,11 +222,36 @@ public sealed class VirtualLibrary
             }
         }
 
+        // Items we invent carry no images or overview of their own: Jellyfin
+        // fetches those from the providers (TMDB, TVDB) using the ids we set.
+        // Queue that work instead of doing it inline, or the sync would block
+        // on thousands of HTTP calls.
+        QueueMetadataRefresh(created);
+
         var removed = RemoveStale(desired, existing);
         _log.LogInformation(
             "LeLibrary: {Added} added, {Updated} updated, {Removed} removed, {Unchanged} unchanged, {Skipped} skipped",
             created.Count, updated, removed, unchanged, desired.Skipped);
         return new VirtualSyncResult(created.Count, updated, removed, unchanged, desired.Skipped);
+    }
+
+    private void QueueMetadataRefresh(IEnumerable<(BaseItem Parent, BaseItem Item)> created)
+    {
+        var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+        {
+            MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+            ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+            ReplaceAllImages = false,
+            ReplaceAllMetadata = false,
+        };
+
+        // Movies and series only: a series refresh pulls its seasons and
+        // episodes with it, so queueing those separately triples the work.
+        foreach (var (_, item) in created)
+        {
+            if (item is not (Movie or Series)) continue;
+            _providers.QueueRefresh(item.Id, options, RefreshPriority.Normal);
+        }
     }
 
     private Dictionary<Guid, BaseItem> LoadExisting()

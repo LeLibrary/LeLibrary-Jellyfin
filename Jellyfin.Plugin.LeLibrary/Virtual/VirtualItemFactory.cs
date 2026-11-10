@@ -82,7 +82,7 @@ public static class VirtualItemFactory
             IsInMixedFolder = true,
             ProviderIds = ProviderIds(item),
         };
-        return new VirtualItem(relative, null, item.Key, movie);
+        return new VirtualItem(relative, null, item.Key, VirtualIdentity.PlayFileName(item.Path, item.Title, item.Year), movie);
     }
 
     private static VirtualItem Series(PlanItem item, string key)
@@ -95,7 +95,7 @@ public static class VirtualItemFactory
             IsVirtualItem = false,
             ProviderIds = ProviderIds(item),
         };
-        return new VirtualItem(relative, null, key, series);
+        return new VirtualItem(relative, null, key, VirtualIdentity.PlayFileName(null, item.SeriesTitle, item.SeriesYear), series);
     }
 
     private static VirtualItem Season(PlanItem item, string key, string seriesRelative)
@@ -107,7 +107,7 @@ public static class VirtualItemFactory
             IndexNumber = item.Season,
             IsVirtualItem = false,
         };
-        return new VirtualItem(relative, seriesRelative, key, season);
+        return new VirtualItem(relative, seriesRelative, key, VirtualIdentity.PlayFileName(null, item.SeriesTitle, item.SeriesYear) + ".mkv", season);
     }
 
     private static VirtualItem Episode(PlanItem item, string seasonRelative)
@@ -123,7 +123,7 @@ public static class VirtualItemFactory
             IsVirtualItem = false,
             ProviderIds = ProviderIds(item),
         };
-        return new VirtualItem(relative, seasonRelative, item.Key, episode);
+        return new VirtualItem(relative, seasonRelative, item.Key, VirtualIdentity.PlayFileName(item.Path, item.SeriesTitle, item.SeriesYear), episode);
     }
 
     private static Dictionary<string, string> ProviderIds(PlanItem item)

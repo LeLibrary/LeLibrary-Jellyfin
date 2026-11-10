@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 
 namespace Jellyfin.Plugin.LeLibrary.Virtual;
@@ -59,6 +60,27 @@ public static class VirtualIdentity
     public static string SeasonRelativePath(string seriesPath, int season)
         => $"{seriesPath}/Season {season.ToString("D2", System.Globalization.CultureInfo.InvariantCulture)}";
 
+    /// <summary>
+    /// File name used in the play URL. Jellyfin reads the container from the
+    /// extension, so it must look like the real file.
+    /// </summary>
+    /// <param name="planPath">The path LeLibrary sent, when present.</param>
+    /// <param name="title">Fallback title.</param>
+    /// <param name="year">Fallback year.</param>
+    /// <returns>A file name.</returns>
+    public static string PlayFileName(string? planPath, string? title, int? year)
+    {
+        var name = string.IsNullOrWhiteSpace(planPath) ? null : System.IO.Path.GetFileNameWithoutExtension(planPath);
+        // A name with no letters or digits (".", "..") is not a file name.
+        if (string.IsNullOrWhiteSpace(name) || !name!.Any(char.IsLetterOrDigit))
+        {
+            name = Folder(title, year);
+        }
+
+        foreach (var c in new[] { '/', '\\', ':', '*', '?', '"', '<', '>', '|' }) name = name!.Replace(c, '-');
+        return name + ".mkv";
+    }
+
     private static string Folder(string? title, int? year)
     {
         var baseName = string.IsNullOrWhiteSpace(title) ? "Untitled" : title!.Trim();
@@ -72,7 +94,7 @@ public static class VirtualIdentity
 /// <param name="ParentRelativePath">Its parent's relative path, or null for the library root.</param>
 /// <param name="Key">Its stable key.</param>
 /// <param name="Item">The populated item.</param>
-public sealed record VirtualItem(string RelativePath, string? ParentRelativePath, string Key, MediaBrowser.Controller.Entities.BaseItem Item);
+public sealed record VirtualItem(string RelativePath, string? ParentRelativePath, string Key, string FileName, MediaBrowser.Controller.Entities.BaseItem Item);
 
 /// <summary>A whole desired library, parents first.</summary>
 /// <param name="Movies">Movies.</param>
