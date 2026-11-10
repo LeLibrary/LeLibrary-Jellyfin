@@ -162,14 +162,30 @@ public sealed class VirtualLibrary
                     continue;
                 }
 
-                // The item's path is the play URL, not a file: Jellyfin streams
-                // a remote path as-is and never looks on disk.
+                // The item points straight at the stream. No file exists: the
+                // media source provider tells Jellyfin the container, which is
+                // what a bare URL otherwise cannot express.
                 var playUrl = $"{playBaseUrl.TrimEnd('/')}/LeLibrary/play/{item.Key}/{Uri.EscapeDataString(item.FileName)}";
                 var id = _library.GetNewItemId(playUrl, item.Item.GetType());
                 byPath[item.RelativePath] = item.Item;
 
                 if (existing.TryGetValue(id, out var current))
                 {
+                    if (!string.Equals(current.Path, playUrl, StringComparison.Ordinal))
+                    {
+                        if (!string.IsNullOrEmpty(current.Path) && current.Path!.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
+                        {
+                            try { File.Delete(current.Path); } catch (IOException) { /* best effort */ }
+                        }
+
+                        current.Path = playUrl;
+                        await current.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, cancellationToken).ConfigureAwait(false);
+                        updated++;
+                        item.Item.Id = current.Id;
+                        byPath[item.RelativePath] = current;
+                        continue;
+                    }
+
                     if (NeedsUpdate(current, item.Item))
                     {
                         current.Name = item.Item.Name;
@@ -303,6 +319,11 @@ public sealed class VirtualLibrary
 
         foreach (var item in stale)
         {
+            if (!string.IsNullOrEmpty(item.Path) && item.Path!.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
+            {
+                try { File.Delete(item.Path); } catch (IOException) { /* next sync retries */ }
+            }
+
             _library.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false, DeleteFromExternalProvider = false }, true);
         }
 
