@@ -103,7 +103,14 @@ public sealed class VirtualLibrary
         var updated = 0;
         var unchanged = 0;
 
-        var (moviesAdded, moviesUpdated, moviesUnchanged) = ApplyGroup(desired.Movies, movies);
+        // One query for everything we wrote before, not one per item: thirty
+        // thousand FindByPath calls would take longer than the scan we removed.
+        var existing = _library.GetItemList(new InternalItemsQuery { Recursive = true })
+            .Where(item => item.Path is not null && item.Path.StartsWith(VirtualIdentity.Scheme, StringComparison.Ordinal))
+            .GroupBy(item => item.Path!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+        var (moviesAdded, moviesUpdated, moviesUnchanged) = ApplyGroup(desired.Movies, movies, existing);
         added += moviesAdded;
         updated += moviesUpdated;
         unchanged += moviesUnchanged;
@@ -116,14 +123,14 @@ public sealed class VirtualLibrary
             foreach (var item in group)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var parent = ResolveParent(item, seriesParents, shows, movies);
+                var parent = ResolveParent(item, seriesParents, shows, movies, existing);
                 if (parent is null)
                 {
                     _log.LogWarning("LeLibrary: no parent for {Path}", item.Path);
                     continue;
                 }
 
-                var (created, changed) = Upsert(item, parent);
+                var (created, changed) = Upsert(item, parent, existing);
                 if (created) added++;
                 else if (changed) updated++;
                 else unchanged++;
@@ -135,19 +142,19 @@ public sealed class VirtualLibrary
             }
         }
 
-        var removed = RemoveStale(desired);
+        var removed = RemoveStale(desired, existing);
         _log.LogInformation("LeLibrary: {Added} added, {Updated} updated, {Removed} removed, {Unchanged} unchanged, {Skipped} skipped", added, updated, removed, unchanged, desired.Skipped);
         return Task.FromResult(new VirtualSyncResult(added, updated, removed, unchanged, desired.Skipped));
     }
 
-    private (int Added, int Updated, int Unchanged) ApplyGroup(IReadOnlyList<VirtualItem> items, BaseItem parent)
+    private (int Added, int Updated, int Unchanged) ApplyGroup(IReadOnlyList<VirtualItem> items, BaseItem parent, Dictionary<string, BaseItem> existing)
     {
         var added = 0;
         var updated = 0;
         var unchanged = 0;
         foreach (var item in items)
         {
-            var (created, changed) = Upsert(item, parent);
+            var (created, changed) = Upsert(item, parent, existing);
             if (created) added++;
             else if (changed) updated++;
             else unchanged++;
@@ -156,7 +163,7 @@ public sealed class VirtualLibrary
         return (added, updated, unchanged);
     }
 
-    private BaseItem? ResolveParent(VirtualItem item, Dictionary<string, BaseItem> seriesParents, CollectionFolder shows, CollectionFolder movies)
+    private BaseItem? ResolveParent(VirtualItem item, Dictionary<string, BaseItem> seriesParents, CollectionFolder shows, CollectionFolder movies, Dictionary<string, BaseItem> existing)
     {
         if (item.ParentPath is null)
         {
@@ -164,17 +171,17 @@ public sealed class VirtualLibrary
         }
 
         if (seriesParents.TryGetValue(item.ParentPath, out var known)) return known;
-        var existing = _library.FindByPath(item.ParentPath, null);
-        if (existing is not null && item.Item is MediaBrowser.Controller.Entities.TV.Series) seriesParents[item.ParentPath] = existing;
-        return existing;
+        if (existing.TryGetValue(item.ParentPath, out var found)) return found;
+        return null;
     }
 
-    private (bool Created, bool Changed) Upsert(VirtualItem item, BaseItem parent)
+    private (bool Created, bool Changed) Upsert(VirtualItem item, BaseItem parent, Dictionary<string, BaseItem> byPath)
     {
-        var existing = _library.FindByPath(item.Path, null);
+        byPath.TryGetValue(item.Path, out var existing);
         if (existing is null)
         {
             _library.CreateItem(item.Item, parent);
+            byPath[item.Path] = item.Item;
             return (true, false);
         }
 
@@ -217,7 +224,7 @@ public sealed class VirtualLibrary
         return true;
     }
 
-    private int RemoveStale(VirtualLibraryPlan desired)
+    private int RemoveStale(VirtualLibraryPlan desired, Dictionary<string, BaseItem> existing)
     {
         var wanted = new HashSet<string>(StringComparer.Ordinal);
         foreach (var group in new[] { desired.Movies, desired.Series, desired.Seasons, desired.Episodes })
@@ -226,30 +233,20 @@ public sealed class VirtualLibrary
         }
 
         // Children before parents so a delete never orphans a subtree.
-        var order = new[]
+        // Children before parents so a delete never orphans a subtree.
+        static int Rank(BaseItem item) => item switch
         {
-            Jellyfin.Data.Enums.BaseItemKind.Episode,
-            Jellyfin.Data.Enums.BaseItemKind.Season,
-            Jellyfin.Data.Enums.BaseItemKind.Series,
-            Jellyfin.Data.Enums.BaseItemKind.Movie,
+            MediaBrowser.Controller.Entities.TV.Episode => 0,
+            MediaBrowser.Controller.Entities.TV.Season => 1,
+            MediaBrowser.Controller.Entities.TV.Series => 2,
+            _ => 3,
         };
-        var removed = 0;
-        foreach (var kind in order)
-        {
-            var stale = _library.GetItemList(new InternalItemsQuery
-            {
-                Recursive = true,
-                IncludeItemTypes = new[] { kind },
-            }).Where(item => item.Path is not null
-                && item.Path.StartsWith(VirtualIdentity.Scheme, StringComparison.Ordinal)
-                && !wanted.Contains(item.Path))
-                .ToList();
 
-            foreach (var item in stale)
-            {
-                _library.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false, DeleteFromExternalProvider = false }, true);
-                removed++;
-            }
+        var removed = 0;
+        foreach (var item in existing.Values.Where(item => !wanted.Contains(item.Path!)).OrderBy(Rank))
+        {
+            _library.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false, DeleteFromExternalProvider = false }, true);
+            removed++;
         }
 
         return removed;
