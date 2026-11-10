@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.LeLibrary.Model;
+using Jellyfin.Plugin.LeLibrary.Sync;
 
 namespace Jellyfin.Plugin.LeLibrary.Client;
 
@@ -39,7 +40,7 @@ public sealed record PlanFetch(bool Ok, string? Error, JellyfinPlan Plan, PlanSo
 /// disk. A failed fetch never replaces the cache: the sync then runs on the old
 /// plan instead of on nothing.
 /// </summary>
-public sealed class LeLibraryClient
+public sealed class LeLibraryClient : IPlanSource
 {
     private readonly HttpClient _http;
     private readonly string _cachePath;
