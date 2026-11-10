@@ -33,23 +33,21 @@ public class VirtualLibraryTests
     };
 
     [Fact]
-    public void ItemIdsSurviveEveryResync()
+    public void AMoviePathStaysInsideTheLibraryFolder()
     {
-        // Jellyfin keys watched state on the id: a new id every sync would lose
-        // the user's progress.
-        Assert.Equal(VirtualIdentity.IdFor("lelibrary://play/torbox:1:2"), VirtualIdentity.IdFor("lelibrary://play/torbox:1:2"));
-        Assert.NotEqual(VirtualIdentity.IdFor("lelibrary://play/torbox:1:2"), VirtualIdentity.IdFor("lelibrary://play/torbox:1:3"));
-        Assert.NotEqual(Guid.Empty, VirtualIdentity.IdFor("lelibrary://play/torbox:1:2"));
+        var path = VirtualIdentity.MediaRelativePath("movie", "The Matrix", 1999, null, null, "torbox:1:2");
+        Assert.StartsWith("The Matrix (1999)/", path, StringComparison.Ordinal);
+        Assert.EndsWith(".mkv", path, StringComparison.Ordinal);
+        Assert.DoesNotContain("..", path, StringComparison.Ordinal);
+        Assert.DoesNotContain("://", path, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData("lelibrary://play/torbox:12:34", "torbox:12:34")]
-    [InlineData("lelibrary://series/603", null)]
-    [InlineData("lelibrary://play/", null)]
-    [InlineData("", null)]
-    public void APlayPathCarriesItsKey(string path, string? expected)
+    [Fact]
+    public void AnEpisodePathCarriesItsSeasonAndEpisode()
     {
-        Assert.Equal(expected, VirtualIdentity.KeyFromPath(path));
+        var path = VirtualIdentity.MediaRelativePath("episode", "The Expanse", 2015, 1, 3, "torbox:7:2");
+        Assert.Contains("Season 01", path, StringComparison.Ordinal);
+        Assert.Contains("S01E03", path, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -60,9 +58,11 @@ public class VirtualLibraryTests
         var movie = Assert.Single(plan.Movies);
         Assert.Equal("The Matrix", movie.Item.Name);
         Assert.Equal(1999, movie.Item.ProductionYear);
-        Assert.True(movie.Item.IsVirtualItem);
+        // Jellyfin treats a virtual item as not-part-of-a-library; ours are ordinary rows.
+        Assert.False(movie.Item.IsVirtualItem);
+        Assert.Equal("torbox:1:2", movie.Item.ProviderIds[VirtualIdentity.ProviderId]);
         Assert.Equal("603", movie.Item.ProviderIds["Tmdb"]);
-        Assert.Equal("lelibrary://play/torbox:1:2", movie.Path);
+        Assert.StartsWith("The Matrix (1999)", movie.RelativePath, StringComparison.Ordinal);
         Assert.Empty(plan.Series);
         Assert.Empty(plan.Episodes);
     }
@@ -85,15 +85,15 @@ public class VirtualLibraryTests
         Assert.Equal(3, plan.Episodes.Count);
 
         var series = plan.Series[0];
-        Assert.Equal("lelibrary://series/63639", series.Path);
+        Assert.Contains("The Expanse (2015)", series.RelativePath, StringComparison.Ordinal);
         Assert.Equal("The Expanse", series.Item.Name);
 
-        var seasonOne = plan.Seasons.Single(s => s.Path.EndsWith("/season/1", StringComparison.Ordinal));
-        Assert.Equal(series.Path, seasonOne.ParentPath);
+        var seasonOne = plan.Seasons.Single(s => s.RelativePath.EndsWith("Season 01", StringComparison.Ordinal));
+        Assert.Equal(series.RelativePath, seasonOne.ParentRelativePath);
 
         var episode = plan.Episodes[1];
-        Assert.Equal("lelibrary://play/torbox:7:2", episode.Path);
-        Assert.Equal(seasonOne.Path, episode.ParentPath);
+        Assert.Contains("S01E03", episode.RelativePath, StringComparison.Ordinal);
+        Assert.Equal(seasonOne.RelativePath, episode.ParentRelativePath);
         Assert.Equal(3, episode.Item.IndexNumber);
         Assert.Equal(1, episode.Item.ParentIndexNumber);
         Assert.Equal("Remember the Cant", episode.Item.Name);
@@ -142,6 +142,6 @@ public class VirtualLibraryTests
             Items = new[] { Episode("torbox:1:1", "Some Show", 2020, 1, 1, tmdbId: null) },
         });
 
-        Assert.Equal("lelibrary://series/some-show", plan.Series[0].Path);
+        Assert.Contains("Some Show (2020)", plan.Series[0].RelativePath, StringComparison.Ordinal);
     }
 }

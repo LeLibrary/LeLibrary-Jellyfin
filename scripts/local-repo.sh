@@ -13,7 +13,7 @@ DOTNET="${DOTNET:-dotnet}"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
-# Jellyfin 12 only, like zurg's plugins: one target, one zip.
+# Jellyfin 12 only: one target, one zip.
 targets=(
   "net10.0:12.0.0.0"
 )

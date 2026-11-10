@@ -8,15 +8,12 @@ using MediaBrowser.Controller.Entities.TV;
 
 namespace Jellyfin.Plugin.LeLibrary.Virtual;
 
-/// <summary>
-/// Turns plan items into Jellyfin items. Pure: no database, no network, so the
-/// identity rules are pinned by tests.
-/// </summary>
+/// <summary>Turns plan items into Jellyfin items. No database, no network.</summary>
 public static class VirtualItemFactory
 {
     /// <summary>Builds the whole desired library from a plan.</summary>
     /// <param name="plan">The plan.</param>
-    /// <returns>Items in dependency order (series, seasons, episodes) plus movies.</param>
+    /// <returns>Items in dependency order, with relative paths.</returns>
     public static VirtualLibraryPlan Build(JellyfinPlan plan)
     {
         var movies = new List<VirtualItem>();
@@ -42,104 +39,99 @@ public static class VirtualItemFactory
                     continue;
                 }
 
-                var seriesPath = VirtualIdentity.SeriesPath(item.TmdbId, item.SeriesTitle);
-                if (!series.TryGetValue(seriesPath, out var seriesItem))
+                var seriesKey = SeriesKey(item);
+                if (!series.TryGetValue(seriesKey, out var seriesItem))
                 {
-                    seriesItem = Series(item, seriesPath);
-                    series[seriesPath] = seriesItem;
+                    seriesItem = Series(item, seriesKey);
+                    series[seriesKey] = seriesItem;
                 }
 
-                var seasonPath = VirtualIdentity.SeasonPath(seriesPath, item.Season.Value);
-                if (!seasons.TryGetValue(seasonPath, out var seasonItem))
+                var seasonKey = $"{seriesKey}:season:{item.Season.Value.ToString(CultureInfo.InvariantCulture)}";
+                if (!seasons.TryGetValue(seasonKey, out var seasonItem))
                 {
-                    seasonItem = Season(item, seasonPath, seriesPath);
-                    seasons[seasonPath] = seasonItem;
+                    seasonItem = Season(item, seasonKey, seriesItem.RelativePath);
+                    seasons[seasonKey] = seasonItem;
                 }
 
-                episodes.Add(Episode(item, seriesPath, seasonPath));
+                episodes.Add(Episode(item, seasonItem.RelativePath));
                 continue;
             }
 
             skipped++;
         }
 
-        return new VirtualLibraryPlan(
-            movies,
-            series.Values.ToList(),
-            seasons.Values.ToList(),
-            episodes,
-            skipped);
+        return new VirtualLibraryPlan(movies, series.Values.ToList(), seasons.Values.ToList(), episodes, skipped);
     }
+
+    /// <summary>The stable key of a series.</summary>
+    /// <param name="item">Any episode of the series.</param>
+    /// <returns>The key.</returns>
+    public static string SeriesKey(PlanItem item)
+        => item.TmdbId is > 0
+            ? "series:" + item.TmdbId.Value.ToString(CultureInfo.InvariantCulture)
+            : "series:" + (item.SeriesTitle ?? "unknown").Trim().ToLowerInvariant().Replace(' ', '-');
 
     private static VirtualItem Movie(PlanItem item)
     {
-        var path = VirtualIdentity.PlayPath(item.Key);
+        var relative = VirtualIdentity.MediaRelativePath("movie", item.Title!, item.Year, null, null, item.Key);
         var movie = new Movie
         {
-            Id = VirtualIdentity.IdFor(path),
-            Path = path,
             Name = item.Title!,
-            OriginalTitle = item.Title,
             ProductionYear = item.Year,
-            IsVirtualItem = true,
+            IsVirtualItem = false,
+            IsInMixedFolder = true,
             ProviderIds = ProviderIds(item),
-            Overview = null,
         };
-        return new VirtualItem(path, null, movie);
+        return new VirtualItem(relative, null, item.Key, movie);
     }
 
-    private static VirtualItem Series(PlanItem item, string path)
+    private static VirtualItem Series(PlanItem item, string key)
     {
+        var relative = VirtualIdentity.SeriesRelativePath(item.SeriesTitle!, item.SeriesYear, key);
         var series = new Series
         {
-            Id = VirtualIdentity.IdFor(path),
-            Path = path,
             Name = item.SeriesTitle!,
             ProductionYear = item.SeriesYear,
-            IsVirtualItem = true,
+            IsVirtualItem = false,
             ProviderIds = ProviderIds(item),
         };
-        return new VirtualItem(path, null, series);
+        return new VirtualItem(relative, null, key, series);
     }
 
-    private static VirtualItem Season(PlanItem item, string path, string seriesPath)
+    private static VirtualItem Season(PlanItem item, string key, string seriesRelative)
     {
-        var number = item.Season!.Value;
+        var relative = VirtualIdentity.SeasonRelativePath(seriesRelative, item.Season!.Value);
         var season = new Season
         {
-            Id = VirtualIdentity.IdFor(path),
-            Path = path,
-            Name = "Season " + number.ToString(CultureInfo.InvariantCulture),
-            IndexNumber = number,
-            SeriesId = VirtualIdentity.IdFor(seriesPath),
-            IsVirtualItem = true,
+            Name = "Season " + item.Season.Value.ToString(CultureInfo.InvariantCulture),
+            IndexNumber = item.Season,
+            IsVirtualItem = false,
         };
-        return new VirtualItem(path, seriesPath, season);
+        return new VirtualItem(relative, seriesRelative, key, season);
     }
 
-    private static VirtualItem Episode(PlanItem item, string seriesPath, string seasonPath)
+    private static VirtualItem Episode(PlanItem item, string seasonRelative)
     {
-        var path = VirtualIdentity.PlayPath(item.Key);
+        var relative = VirtualIdentity.MediaRelativePath("episode", item.SeriesTitle!, item.SeriesYear, item.Season, item.Episode, item.Key);
         var episode = new Episode
         {
-            Id = VirtualIdentity.IdFor(path),
-            Path = path,
             Name = string.IsNullOrWhiteSpace(item.EpisodeTitle)
                 ? "Episode " + item.Episode!.Value.ToString(CultureInfo.InvariantCulture)
                 : item.EpisodeTitle,
             IndexNumber = item.Episode,
             ParentIndexNumber = item.Season,
-            SeriesId = VirtualIdentity.IdFor(seriesPath),
-            SeasonId = VirtualIdentity.IdFor(seasonPath),
-            IsVirtualItem = true,
+            IsVirtualItem = false,
             ProviderIds = ProviderIds(item),
         };
-        return new VirtualItem(path, seasonPath, episode);
+        return new VirtualItem(relative, seasonRelative, item.Key, episode);
     }
 
     private static Dictionary<string, string> ProviderIds(PlanItem item)
     {
-        var ids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var ids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            [VirtualIdentity.ProviderId] = item.Key,
+        };
         if (item.TmdbId is > 0) ids["Tmdb"] = item.TmdbId.Value.ToString(CultureInfo.InvariantCulture);
         if (item.TvdbId is > 0) ids["Tvdb"] = item.TvdbId.Value.ToString(CultureInfo.InvariantCulture);
         if (!string.IsNullOrWhiteSpace(item.ImdbId)) ids["Imdb"] = item.ImdbId!;

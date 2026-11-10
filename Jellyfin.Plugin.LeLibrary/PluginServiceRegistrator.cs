@@ -48,15 +48,6 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
             }));
         serviceCollection.AddSingleton<Jellyfin.Plugin.LeLibrary.Virtual.VirtualLibrary>();
         serviceCollection.AddSingleton<LeLibrarySync>();
-        serviceCollection.AddSingleton<MediaBrowser.Controller.Library.IMediaSourceProvider>(sp => new Jellyfin.Plugin.LeLibrary.Virtual.LeLibraryMediaSourceProvider(
-            sp.GetRequiredService<LinkCache>(),
-            () =>
-            {
-                var configuration = Plugin.Instance?.Configuration;
-                return string.IsNullOrWhiteSpace(configuration?.ServerUrl)
-                    ? sp.GetRequiredService<IServerApplicationHost>().GetApiUrlForLocalAccess()
-                    : configuration!.ServerUrl.Trim();
-            }));
         serviceCollection.AddSingleton(sp => new SyncTask(
             sp.GetRequiredService<LeLibrarySync>(),
             sp.GetRequiredService<IServerApplicationHost>(),
