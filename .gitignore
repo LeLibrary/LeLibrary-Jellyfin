@@ -9,3 +9,6 @@ obj/
 /tmp/
 # local repo folders used by the Jellyfin container test
 /local-repo/
+
+# Private agent notes (never published)
+AGENTS.md
