@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Jellyfin setup - LeLibrary</title>
+<meta name="description" content="Install and configure LeLibrary for Jellyfin, and what it does not do." />
+<style>
+  :root {
+    --bg: #0d0f14; --panel: #151922; --panel-2: #1b202b;
+    --ink: #e8ecf4; --muted: #9aa4b5; --line: #262c39;
+    --accent: #f5b32c; --accent-ink: #221a05; --ok: #3ddc97;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 15% -10%, #1c2230 0%, var(--bg) 55%) fixed;
+    color: var(--ink); font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 22px; }
+  header.top { position: sticky; top: 0; z-index: 10; background: rgba(13,15,20,.86); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  .top-inner { display: flex; align-items: center; gap: 18px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+  .brand img { width: 28px; height: 28px; border-radius: 7px; }
+  nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+  nav a { color: var(--muted); padding: 8px 12px; border-radius: 9px; font-size: 14px; font-weight: 600; }
+  nav a:hover { color: var(--ink); background: var(--panel); text-decoration: none; }
+  nav a.active { color: var(--ink); background: var(--panel-2); }
+  .pill { display: inline-flex; gap: 7px; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--panel); }
+  .pill.ok { color: #0c1a12; background: var(--ok); border-color: transparent; }
+  .pill.soon { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
+  main { padding: 44px 0 70px; }
+  h1 { font-size: 36px; line-height: 1.15; margin: 0 0 10px; letter-spacing: -0.4px; }
+  h2 { font-size: 21px; margin: 38px 0 10px; }
+  h3 { font-size: 16px; margin: 22px 0 6px; }
+  p { margin: 0 0 14px; color: #cdd5e3; }
+  .lede { font-size: 18px; color: var(--muted); max-width: 720px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin: 16px 0; }
+  code, .url { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; background: #0a0c11; border: 1px solid var(--line); border-radius: 8px; padding: 2px 7px; color: #dfe6f3; }
+  .url { display: block; padding: 12px 14px; overflow-x: auto; white-space: nowrap; margin: 10px 0; }
+  ol, ul { margin: 8px 0 16px; padding-left: 22px; color: #cdd5e3; }
+  li { margin: 7px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .6px; }
+  .note { border-left: 3px solid var(--accent); padding: 10px 0 10px 14px; color: #d8c79a; }
+  footer { border-top: 1px solid var(--line); padding: 24px 0 40px; color: var(--muted); font-size: 14px; }
+  @media (max-width: 560px) { h1 { font-size: 28px; } .top-inner { height: auto; padding: 10px 0; flex-wrap: wrap; } nav { margin-left: 0; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-inner">
+    <div class="brand"><img src="thumb.png" alt="" />LeLibrary <span class="pill">for Jellyfin</span></div>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="jellyfin.html" class="active">Jellyfin</a>
+      <a href="manifest.json">Plugin repository</a>
+      <a href="https://github.com/LeLibrary/LeLibrary-Jellyfin">Source</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <h1>Jellyfin setup</h1>
+  <p class="lede">Four steps, one key, and one link you copy from your LeLibrary setup page.</p>
+
+  <div class="card">
+    <span class="pill ok">Supported</span>
+    <span class="pill soon">Real-Debrid, AllDebrid, Premiumize later</span>
+    <p style="margin:12px 0 0;color:var(--muted)">Jellyfin <strong>12</strong> only. The plugin will not load on 10.x.</p>
+  </div>
+
+  <h2>1. Add the plugin repository</h2>
+  <p>Dashboard → Plugins → Repositories → <strong>+</strong>. Give it any name and this URL:</p>
+  <span class="url">https://lelibrary.github.io/LeLibrary-Jellyfin/manifest.json</span>
+
+  <h2>2. Install and restart</h2>
+  <p>Plugins → Catalog → <strong>LeLibrary</strong> → Install. Restart Jellyfin when it asks. Updates arrive here too; nothing to download by hand.</p>
+
+  <h2>3. Copy your LeLibrary link</h2>
+  <p>On your LeLibrary setup page, open the <strong>Jellyfin</strong> card and copy the setup link. It looks like
+     <code>https://lelibrary.uk/&lt;your-setup&gt;</code> and it is personal: anyone with it can read your library.</p>
+
+  <h2>4. Fill in the plugin settings</h2>
+  <table>
+    <tr><th>Debrid provider</th><td>TorBox for now</td></tr>
+    <tr><th>Debrid API key</th><td>your own key, from your provider's account page</td></tr>
+    <tr><th>LeLibrary URL</th><td>the link from step 3 - a trailing <code>/manifest.json</code> is accepted too</td></tr>
+    <tr><th>Server URL</th><td>the address your players use, e.g. <code>http://192.168.1.20:8096</code></td></tr>
+    <tr><th>Sync every</th><td>6 hours by default</td></tr>
+  </table>
+  <p>Press <strong>Test key</strong>, then <strong>Run sync now</strong>. The first sync creates the
+     <strong>TorBox Movies</strong> and <strong>TorBox Series</strong> libraries and fills them -
+     tens of thousands of titles in about two minutes.</p>
+
+  <div class="note">
+    In Docker the server reports its container address, which players cannot reach. Always set
+    <strong>Server URL</strong> on a containerised install.
+  </div>
+
+  <h2>Everyday use</h2>
+  <ul>
+    <li>It syncs on startup and every six hours, or whenever you press <strong>Run sync now</strong>.</li>
+    <li>Adding a title in LeLibrary and syncing puts it in Jellyfin. Removing it from LeLibrary takes it out on the next sync.</li>
+    <li>Watched state and resume points are kept per item, because item ids are derived from a stable key.</li>
+    <li>Changing your debrid key re-signs everything on the next sync without touching what you have watched.</li>
+  </ul>
+
+  <h2>What it will not do</h2>
+  <table>
+    <tr><th>Not a mount</th><td>Nothing outside Jellyfin can read this library. For Infuse, rclone or an *arr stack pointed at the same files, use a folder/mount tool instead.</td></tr>
+    <tr><th>No downloader</th><td>Nothing is fetched until something plays, and nothing is kept afterwards.</td></tr>
+    <tr><th>No search-on-demand</th><td>Only what is already in your debrid account appears.</td></tr>
+    <tr><th>Stored releases only</th><td>Compressed or encrypted archives are left out rather than added as something that will not play.</td></tr>
+    <tr><th>No external subtitle files</th><td>Embedded subtitles work; sidecar subtitle files are not written.</td></tr>
+  </table>
+
+  <h2>When something is wrong</h2>
+  <ul>
+    <li><strong>Test key</strong> says the key was rejected: check it on your provider's page. Nothing in the library changes on a failed key.</li>
+    <li>The library is empty: press <strong>Run sync now</strong> and read the message. A failed sync never deletes anything.</li>
+    <li>Playback says there are no compatible streams: check <strong>Server URL</strong> is the address players use.</li>
+    <li>Logs: Dashboard → Logs, look for <code>LeLibrary</code>.</li>
+  </ul>
+
+  <h2>Your key stays yours</h2>
+  <p>LeLibrary never sees your debrid key: the plugin talks to your provider directly. Jellyfin stores plugin
+     settings as plain XML on disk, so protect the config directory. The LeLibrary setup link is written into
+     Jellyfin and gives read access to your library - treat it like a password.</p>
+</main>
+
+<footer class="wrap">
+  LeLibrary for Jellyfin · <a href="https://github.com/LeLibrary/LeLibrary-Jellyfin">source</a> ·
+  <a href="https://github.com/LeLibrary/LeLibrary-Jellyfin/issues">issues</a> ·
+  <a href="manifest.json">plugin repository</a>
+</footer>
+</body>
+</html>
