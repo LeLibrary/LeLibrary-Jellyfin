@@ -36,6 +36,7 @@ public sealed class LeLibrarySync
     private readonly DebridClientFactory _clients;
     private readonly VirtualLibrary _library;
     private readonly IApplicationPaths _paths;
+    private readonly IServerApplicationHost _appHost;
     private readonly ILogger<LeLibrarySync> _log;
 
     /// <summary>Initializes a new instance of the <see cref="LeLibrarySync"/> class.</summary>
@@ -43,11 +44,12 @@ public sealed class LeLibrarySync
     /// <param name="library">The virtual library writer.</param>
     /// <param name="paths">Jellyfin's paths (for the cached plan).</param>
     /// <param name="log">The logger.</param>
-    public LeLibrarySync(DebridClientFactory clients, VirtualLibrary library, IApplicationPaths paths, ILogger<LeLibrarySync> log)
+    public LeLibrarySync(DebridClientFactory clients, VirtualLibrary library, IApplicationPaths paths, IServerApplicationHost appHost, ILogger<LeLibrarySync> log)
     {
         _clients = clients;
         _library = library;
         _paths = paths;
+        _appHost = appHost;
         _log = log;
     }
 
@@ -95,8 +97,17 @@ public sealed class LeLibrarySync
         };
 
         var desired = VirtualItemFactory.Build(playable);
-        var (movies, shows) = await _library.EnsureLibrariesAsync(cancellationToken).ConfigureAwait(false);
-        var result = await _library.ApplyAsync(desired, movies, shows, cancellationToken).ConfigureAwait(false);
+        var dataPath = Path.Combine(_paths.DataPath, "lelibrary");
+        var (movies, shows) = await _library.EnsureLibrariesAsync(dataPath, cancellationToken).ConfigureAwait(false);
+        if (movies is null || shows is null)
+        {
+            return new SyncOutcome(false, "the libraries could not be created", null);
+        }
+
+        var playBase = string.IsNullOrWhiteSpace(configuration.ServerUrl)
+            ? _appHost.GetApiUrlForLocalAccess()
+            : configuration.ServerUrl.Trim();
+        var result = await _library.ApplyAsync(desired, movies, shows, playBase, cancellationToken).ConfigureAwait(false);
         _ = _log;
         return new SyncOutcome(true, null, result);
     }

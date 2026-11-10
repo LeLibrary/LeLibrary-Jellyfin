@@ -36,8 +36,8 @@ one is.
 
    Press **Test key**, then **Run sync now**. The sync creates a **LeLibrary
    Movies** and a **LeLibrary Shows** library itself and fills them - there is
-   no folder to pick and no library to add. A library of tens of thousands of
-   titles appears in one pass, because nothing is scanned.
+   no folder to pick and no library to add. Tens of thousands of titles appear
+   in one pass, in about two minutes.
 
 > **No release yet?** If the catalog shows nothing, the repository has no
 > tagged build. `scripts/local-repo.sh` builds the same zip and `manifest.json`
@@ -52,8 +52,9 @@ debrid key or a byte of your playback:
    plugin settings.
 2. The plugin asks LeLibrary which titles belong in the library and what they
    are called, then lists your debrid account itself.
-3. It creates the items **inside Jellyfin** - no files, no folders, no library
-   scan.
+3. It creates the items **inside Jellyfin** - no files, no library scan. Each
+   item's play address is the plugin's own resolver, so playback always gets a
+   fresh link.
 4. When you press play, Jellyfin asks the plugin for a media source, the plugin
    mints a fresh debrid link, and Jellyfin streams it. Links expire; a new one
    is minted every time.
