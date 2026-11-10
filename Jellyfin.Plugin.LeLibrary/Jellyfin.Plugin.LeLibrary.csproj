@@ -22,6 +22,9 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Configuration/configPage.html" />
+    <!-- Jellyfin picks this up as the plugin's own image: catalogue, plugin
+         list and detail page all read it from the installed folder. -->
+    <Content Include="thumb.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
