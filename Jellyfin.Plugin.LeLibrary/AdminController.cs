@@ -1,6 +1,5 @@
 using System.Threading;
 using System.Threading.Tasks;
-using Jellyfin.Plugin.LeLibrary.Sync;
 using MediaBrowser.Controller;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,13 +15,13 @@ namespace Jellyfin.Plugin.LeLibrary;
 [Authorize]
 public sealed class AdminController : ControllerBase
 {
-    private readonly SyncTask _sync;
+    private readonly LeLibrarySync _sync;
     private readonly DebridClientFactory _clients;
 
     /// <summary>Initializes a new instance of the <see cref="AdminController"/> class.</summary>
     /// <param name="sync">The scheduled task.</param>
     /// <param name="clients">The provider factory.</param>
-    public AdminController(SyncTask sync, DebridClientFactory clients)
+    public AdminController(LeLibrarySync sync, DebridClientFactory clients)
     {
         _sync = sync;
         _clients = clients;
@@ -63,10 +62,10 @@ public sealed class AdminController : ControllerBase
             return BadRequest(new { ok = false, message = "LeLibrary is not loaded." });
         }
 
-        var result = await _sync.RunAsync(configuration, cancellationToken).ConfigureAwait(false);
-        var message = result.Ok
-            ? $"Added {result.Added}, updated {result.Updated}, removed {result.Removed}, renamed {result.Moved}, unchanged {result.Unchanged}, skipped {result.Skipped}."
-            : result.Error ?? "The sync could not run.";
-        return Ok(new { ok = result.Ok, message });
+        var outcome = await _sync.RunAsync(configuration, cancellationToken).ConfigureAwait(false);
+        var message = outcome.Ok
+            ? $"Added {outcome.Result!.Added}, updated {outcome.Result.Updated}, removed {outcome.Result.Removed}, unchanged {outcome.Result.Unchanged}, skipped {outcome.Result.Skipped}."
+            : outcome.Error ?? "The sync could not run.";
+        return Ok(new { ok = outcome.Ok, message });
     }
 }

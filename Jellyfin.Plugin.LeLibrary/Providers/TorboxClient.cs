@@ -6,7 +6,6 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Jellyfin.Plugin.LeLibrary.Sync;
 
 namespace Jellyfin.Plugin.LeLibrary.Providers;
 
@@ -85,7 +84,7 @@ public sealed class TorboxClient : IDebridClient
                     {
                         if (file.Id is null) continue;
                         files.Add(new DebridFile(
-                            PathBuilder.Key(Provider, torrentId, file.Id.Value),
+                            $"{Provider}:{torrentId}:{file.Id.Value}",
                             file.Name ?? string.Empty,
                             file.Size));
                     }
@@ -108,7 +107,7 @@ public sealed class TorboxClient : IDebridClient
     /// <inheritdoc />
     public async Task<MintResult> MintAsync(string key, CancellationToken cancellationToken)
     {
-        if (!PathBuilder.TryParseKey(key, out var parsed) || parsed.Provider != Provider)
+        if (!PlanKey.TryParse(key, out var parsed) || parsed.Provider != Provider)
         {
             return MintResult.Fail(MintStatus.NotFound);
         }
