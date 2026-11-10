@@ -107,13 +107,15 @@ public class SyncRunnerTests : IDisposable
 
         Assert.True(result.Ok);
         Assert.Equal(2, result.Added);
-        Assert.Contains("The Matrix (1999)/The Matrix (1999).strm", AllFiles());
-        Assert.Contains("The Matrix (1999)/The Matrix (1999).nfo", AllFiles());
-        Assert.Contains("The Expanse (2015)/Season 01/The Expanse S01E03.strm", AllFiles());
-        Assert.Contains("The Expanse (2015)/tvshow.nfo", AllFiles());
+        // Two libraries, two folders: Jellyfin needs a Movies library and a
+        // Shows library, not one mixed tree.
+        Assert.Contains("Movies/The Matrix (1999)/The Matrix (1999).strm", AllFiles());
+        Assert.Contains("Movies/The Matrix (1999)/The Matrix (1999).nfo", AllFiles());
+        Assert.Contains("Shows/The Expanse (2015)/Season 01/The Expanse S01E03.strm", AllFiles());
+        Assert.Contains("Shows/The Expanse (2015)/tvshow.nfo", AllFiles());
         Assert.Equal(
             "http://jellyfin:8096/LeLibrary/play/torbox:1:2",
-            System.IO.File.ReadAllText(Path.Combine(_root, "The Matrix (1999)/The Matrix (1999).strm")).Trim());
+            System.IO.File.ReadAllText(Path.Combine(_root, "Movies/The Matrix (1999)/The Matrix (1999).strm")).Trim());
     }
 
     [Fact]
@@ -157,7 +159,7 @@ public class SyncRunnerTests : IDisposable
 
         Assert.False(result.Ok);
         Assert.Equal(0, result.Removed);
-        Assert.Contains("The Matrix (1999)/The Matrix (1999).strm", AllFiles());
+        Assert.Contains("Movies/The Matrix (1999)/The Matrix (1999).strm", AllFiles());
     }
 
     [Theory]
@@ -182,7 +184,7 @@ public class SyncRunnerTests : IDisposable
 
         Assert.False(result.Ok);
         Assert.Equal(0, result.Removed);
-        Assert.Contains("The Matrix (1999)/The Matrix (1999).strm", AllFiles());
+        Assert.Contains("Movies/The Matrix (1999)/The Matrix (1999).strm", AllFiles());
     }
 
     [Fact]
@@ -272,8 +274,8 @@ public class SyncRunnerTests : IDisposable
         var result = await runner.RunAsync(new SyncRequest(_root, "https://l.uk/x", BaseUrl), CancellationToken.None);
 
         Assert.Equal(1, result.Moved);
-        Assert.Contains("The Matrix (1999)/The Matrix (1999) - 2160p.strm", AllFiles());
-        Assert.DoesNotContain("The Matrix (1999)/The Matrix (1999).strm", AllFiles());
+        Assert.Contains("Movies/The Matrix (1999)/The Matrix (1999) - 2160p.strm", AllFiles());
+        Assert.DoesNotContain("Movies/The Matrix (1999)/The Matrix (1999).strm", AllFiles());
     }
 
     [Fact]
@@ -297,7 +299,7 @@ public class SyncRunnerTests : IDisposable
         Assert.Equal(0, result.Unchanged);
         Assert.Equal(
             "http://new:8096/LeLibrary/play/torbox:1:2",
-            System.IO.File.ReadAllText(Path.Combine(_root, "The Matrix (1999)/The Matrix (1999).strm")).Trim());
+            System.IO.File.ReadAllText(Path.Combine(_root, "Movies/The Matrix (1999)/The Matrix (1999).strm")).Trim());
     }
 
     [Fact]
@@ -332,7 +334,7 @@ public class SyncRunnerTests : IDisposable
 
         await Runner(plans, provider).RunAsync(new SyncRequest(_root, "https://l.uk/x", BaseUrl), CancellationToken.None);
 
-        Assert.Contains("Heat (1995)/Heat (1995).strm", AllFiles());
+        Assert.Contains("Movies/Heat (1995)/Heat (1995).strm", AllFiles());
         Assert.False(System.IO.File.Exists(Path.Combine(Path.GetDirectoryName(_root)!, "escape.strm")));
     }
 }

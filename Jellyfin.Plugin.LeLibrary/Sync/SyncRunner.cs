@@ -104,9 +104,12 @@ public sealed class SyncRunner
                 continue;
             }
 
+            // Two folders under the root, one per Jellyfin library type, so a
+            // user adds a Movies library and a Shows library instead of one
+            // mixed tree that cannot type its items.
             var relative = string.Equals(item.Kind, "episode", StringComparison.OrdinalIgnoreCase)
-                ? PathBuilder.EpisodeRelative(item)
-                : PathBuilder.MovieRelative(item);
+                ? $"Shows/{PathBuilder.EpisodeRelative(item)}"
+                : $"Movies/{PathBuilder.MovieRelative(item)}";
             // Two keys can only land on one path when LeLibrary already failed
             // to collapse copies; the first wins and the rest are reported.
             if (!takenPaths.Add(relative))
