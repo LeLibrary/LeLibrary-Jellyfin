@@ -52,7 +52,7 @@ cat > "$OUT/manifest.json" <<EOF
     "overview": "Your debrid library as Jellyfin libraries, matched and named the LeLibrary way. Nothing is downloaded and LeLibrary never sees your key.",
     "owner": "LeLibrary",
     "category": "General",
-    "imageUrl": "${SOURCE_BASE:-file://$OUT}/thumb.png",
+    "imageUrl": "${PAGES_BASE:-${SOURCE_BASE:-file://$OUT}}/thumb.png",
     "versions": [
       ${versions_json%,}
     ]
