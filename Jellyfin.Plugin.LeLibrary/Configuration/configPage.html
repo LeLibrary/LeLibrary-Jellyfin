@@ -44,14 +44,6 @@
                 </div>
 
                 <div class="inputContainer">
-                    <label class="inputLabel inputLabelUnfocused" for="libraryPath">Library folder</label>
-                    <input is="emby-input" type="text" id="libraryPath" name="LibraryPath" autocomplete="off" />
-                    <div class="fieldDescription">
-                        Where the playable files are written. Add this folder as a Jellyfin library.
-                    </div>
-                </div>
-
-                <div class="inputContainer">
                     <label class="inputLabel inputLabelUnfocused" for="serverUrl">Server URL</label>
                     <input is="emby-input" type="text" id="serverUrl" name="ServerUrl" autocomplete="off" />
                     <div class="fieldDescription">
@@ -99,7 +91,6 @@
                     form.querySelector('#debridProvider').value = config.Provider || 'torbox';
                     form.querySelector('#debridApiKey').value = config.DebridApiKey || '';
                     form.querySelector('#planUrl').value = config.PlanUrl || '';
-                    form.querySelector('#libraryPath').value = config.LibraryPath || '/config/lelibrary';
                     form.querySelector('#serverUrl').value = config.ServerUrl || '';
                     form.querySelector('#syncHours').value = String(config.SyncHours || 6);
                 });
@@ -111,7 +102,6 @@
                     config.Provider = form.querySelector('#debridProvider').value;
                     config.DebridApiKey = form.querySelector('#debridApiKey').value;
                     config.PlanUrl = form.querySelector('#planUrl').value;
-                    config.LibraryPath = form.querySelector('#libraryPath').value;
                     config.ServerUrl = form.querySelector('#serverUrl').value;
                     config.SyncHours = parseInt(form.querySelector('#syncHours').value, 10);
                     return ApiClient.updatePluginConfiguration(pluginId, config);

@@ -46,9 +46,19 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
             {
                 Timeout = System.Threading.Timeout.InfiniteTimeSpan,
             }));
+        serviceCollection.AddSingleton<Jellyfin.Plugin.LeLibrary.Virtual.VirtualLibrary>();
+        serviceCollection.AddSingleton<LeLibrarySync>();
+        serviceCollection.AddSingleton<MediaBrowser.Controller.Library.IMediaSourceProvider>(sp => new Jellyfin.Plugin.LeLibrary.Virtual.LeLibraryMediaSourceProvider(
+            sp.GetRequiredService<LinkCache>(),
+            () =>
+            {
+                var configuration = Plugin.Instance?.Configuration;
+                return string.IsNullOrWhiteSpace(configuration?.ServerUrl)
+                    ? sp.GetRequiredService<IServerApplicationHost>().GetApiUrlForLocalAccess()
+                    : configuration!.ServerUrl.Trim();
+            }));
         serviceCollection.AddSingleton(sp => new SyncTask(
-            sp.GetRequiredService<DebridClientFactory>(),
-            sp.GetRequiredService<MediaBrowser.Common.Configuration.IApplicationPaths>(),
+            sp.GetRequiredService<LeLibrarySync>(),
             sp.GetRequiredService<IServerApplicationHost>(),
             sp.GetRequiredService<MediaBrowser.Controller.Library.ILibraryManager>(),
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SyncTask>>()));

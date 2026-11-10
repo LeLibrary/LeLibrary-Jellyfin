@@ -31,22 +31,13 @@ one is.
    | Debrid provider | TorBox (Real-Debrid, AllDebrid and Premiumize follow) |
    | Debrid API key | your own key |
    | LeLibrary URL | the link from the Setup card |
-   | Library folder | `/config/lelibrary` (default) |
    | Server URL | the address players use, e.g. `http://192.168.1.20:8096` |
    | Sync every | 6 hours (default) |
 
-   Press **Test key**, then **Run sync now**. The first sync writes one `.strm`
-   and one `.nfo` per title or episode; on a large library that takes a minute
-   or two.
-
-5. **Add two libraries.** Jellyfin -> Dashboard -> Libraries -> Add:
-
-   - **Movies** with the folder `<Library folder>/Movies`
-   - **Shows** with the folder `<Library folder>/Shows`
-
-   The plugin keeps the two apart on purpose: one mixed library cannot type its
-   items, so movies and episodes need their own library, exactly like a normal
-   Jellyfin setup.
+   Press **Test key**, then **Run sync now**. The sync creates a **LeLibrary
+   Movies** and a **LeLibrary Shows** library itself and fills them - there is
+   no folder to pick and no library to add. A library of tens of thousands of
+   titles appears in one pass, because nothing is scanned.
 
 > **No release yet?** If the catalog shows nothing, the repository has no
 > tagged build. `scripts/local-repo.sh` builds the same zip and `manifest.json`
@@ -61,11 +52,11 @@ debrid key or a byte of your playback:
    plugin settings.
 2. The plugin asks LeLibrary which titles belong in the library and what they
    are called, then lists your debrid account itself.
-3. It writes one small `.strm` file per title or episode (plus an `.nfo` with
-   the metadata and art URL).
-4. When you press play, Jellyfin asks the plugin for a fresh debrid link, and the
-   plugin streams it through to the player. Links expire; the plugin mints a new
-   one each time.
+3. It creates the items **inside Jellyfin** - no files, no folders, no library
+   scan.
+4. When you press play, Jellyfin asks the plugin for a media source, the plugin
+   mints a fresh debrid link, and Jellyfin streams it. Links expire; a new one
+   is minted every time.
 
 Your files stay on your debrid account. Playback runs through your own Jellyfin
 server, so its upload bandwidth is the ceiling.

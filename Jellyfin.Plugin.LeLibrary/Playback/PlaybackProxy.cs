@@ -5,7 +5,6 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.LeLibrary.Providers;
-using Jellyfin.Plugin.LeLibrary.Sync;
 
 namespace Jellyfin.Plugin.LeLibrary.Playback;
 
@@ -56,7 +55,7 @@ public sealed class PlaybackProxy
     public async Task<ProxyResponse> OpenAsync(string? key, string? range, string? ifRange, CancellationToken cancellationToken)
     {
         var provider = _provider();
-        if (!PathBuilder.TryParseKey(key, out var parsed) || parsed.Provider != provider.Provider)
+        if (!PlanKey.TryParse(key, out var parsed) || parsed.Provider != provider.Provider)
         {
             return Error(400, "not a playable LeLibrary key");
         }
