@@ -256,7 +256,7 @@ public sealed class VirtualLibrary
         var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
         {
             MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-            ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+            ImageRefreshMode = MetadataRefreshMode.None,
             ReplaceAllImages = false,
             ReplaceAllMetadata = false,
         };

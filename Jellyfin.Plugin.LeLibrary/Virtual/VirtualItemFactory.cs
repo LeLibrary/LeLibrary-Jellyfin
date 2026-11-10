@@ -82,6 +82,7 @@ public static class VirtualItemFactory
             IsInMixedFolder = true,
             ProviderIds = ProviderIds(item),
         };
+        AttachArt(movie, item);
         return new VirtualItem(relative, null, item.Key, VirtualIdentity.PlayFileName(item.Path, item.Title, item.Year), movie);
     }
 
@@ -95,6 +96,7 @@ public static class VirtualItemFactory
             IsVirtualItem = false,
             ProviderIds = ProviderIds(item),
         };
+        AttachArt(series, item);
         return new VirtualItem(relative, null, key, VirtualIdentity.PlayFileName(null, item.SeriesTitle, item.SeriesYear), series);
     }
 
@@ -124,6 +126,21 @@ public static class VirtualItemFactory
             ProviderIds = ProviderIds(item),
         };
         return new VirtualItem(relative, seasonRelative, item.Key, VirtualIdentity.PlayFileName(item.Path, item.SeriesTitle, item.SeriesYear), episode);
+    }
+
+    /// <summary>Attaches the poster and backdrop LeLibrary chose to an item.</summary>
+    /// <param name="item">The Jellyfin item.</param>
+    /// <param name="plan">The plan item it came from.</param>
+    public static void AttachArt(MediaBrowser.Controller.Entities.BaseItem item, PlanItem plan)
+    {
+        if (!string.IsNullOrWhiteSpace(plan.Poster))
+        {
+            item.AddImage(new MediaBrowser.Controller.Entities.ItemImageInfo
+            {
+                Path = plan.Poster!,
+                Type = MediaBrowser.Model.Entities.ImageType.Primary,
+            });
+        }
     }
 
     private static Dictionary<string, string> ProviderIds(PlanItem item)
