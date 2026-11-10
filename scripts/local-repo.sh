@@ -65,6 +65,7 @@ cp "$ROOT/Jellyfin.Plugin.LeLibrary/thumb.png" "$OUT/thumb.png"
 # The same folder is the GitHub Pages site: the manifest has to sit next to the
 # pages, because the repository URL is .../manifest.json.
 cp "$ROOT"/site/*.html "$OUT"/ 2>/dev/null || true
+cp -r "$ROOT/site/media" "$OUT"/ 2>/dev/null || true
 touch "$OUT/.nojekyll"
 
 echo "repo written to $OUT"
