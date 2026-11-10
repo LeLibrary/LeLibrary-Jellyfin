@@ -1,4 +1,31 @@
+using System.Collections.Generic;
+
 namespace Jellyfin.Plugin.LeLibrary.Model;
+
+/// <summary>One Jellyfin library the plan describes.</summary>
+/// <param name="Key">The library key (movies, shows).</param>
+/// <param name="Name">The name to show in Jellyfin.</param>
+/// <param name="Kind">The library kind.</param>
+public sealed record PlanLibrary(string Key, string Name, string Kind);
+
+/// <summary>A whole plan document.</summary>
+public sealed class JellyfinPlan
+{
+    /// <summary>The schema this plugin understands.</summary>
+    public const int CurrentSchemaVersion = 1;
+
+    /// <summary>Gets or sets the schema version LeLibrary sent.</summary>
+    public int SchemaVersion { get; set; }
+
+    /// <summary>Gets or sets the debrid provider id.</summary>
+    public string Provider { get; set; } = string.Empty;
+
+    /// <summary>Gets the libraries.</summary>
+    public IReadOnlyList<PlanLibrary> Libraries { get; init; } = new List<PlanLibrary>();
+
+    /// <summary>Gets the items.</summary>
+    public IReadOnlyList<PlanItem> Items { get; init; } = new List<PlanItem>();
+}
 
 /// <summary>
 /// One item of the LeLibrary plan. Field names mirror the JSON contract
@@ -47,6 +74,15 @@ public sealed record PlanItem
 
     /// <summary>Gets the relative path LeLibrary chose for this item.</summary>
     public string Path { get; init; } = string.Empty;
+
+    /// <summary>Gets the TMDB id.</summary>
+    public int? TmdbId { get; init; }
+
+    /// <summary>Gets the TVDB id (episodes).</summary>
+    public int? TvdbId { get; init; }
+
+    /// <summary>Gets the IMDB id.</summary>
+    public string? ImdbId { get; init; }
 
     /// <summary>Gets the poster URL.</summary>
     public string? Poster { get; init; }
