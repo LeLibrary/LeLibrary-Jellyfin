@@ -1,4 +1,5 @@
 using System.Threading;
+using Microsoft.AspNetCore.Http;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.LeLibrary.Playback;
 using Microsoft.AspNetCore.Authorization;
@@ -29,8 +30,11 @@ public sealed class PlaybackController : ControllerBase
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The stream, or an error status with a readable message.</returns>
     [HttpGet("play/{key}")]
+    [HttpGet("play/{key}/{fileName}")]
+    [HttpHead("play/{key}")]
+    [HttpHead("play/{key}/{fileName}")]
     [AllowAnonymous]
-    public async Task<IActionResult> Play(string key, CancellationToken cancellationToken)
+    public async Task<IActionResult> Play(string key, string? fileName, CancellationToken cancellationToken)
     {
         var range = Request.Headers.TryGetValue("Range", out var rangeValue) ? rangeValue.ToString() : null;
         var ifRange = Request.Headers.TryGetValue("If-Range", out var ifRangeValue) ? ifRangeValue.ToString() : null;
@@ -42,15 +46,47 @@ public sealed class PlaybackController : ControllerBase
         }
 
         Response.StatusCode = result.Status;
-        Response.ContentType = result.ContentType ?? "application/octet-stream";
+        // Jellyfin builds the item's container from this URL's extension, and a
+        // player uses the response type; upstream often says octet-stream.
+        var contentType = result.ContentType;
+        if (string.IsNullOrEmpty(contentType) || contentType == "application/octet-stream")
+        {
+            contentType = ContentTypeFor(fileName, result.ContentType);
+        }
+
+        Response.ContentType = contentType ?? "application/octet-stream";
         if (result.ContentLength is not null) Response.ContentLength = result.ContentLength;
         if (result.ContentRange is not null) Response.Headers["Content-Range"] = result.ContentRange;
         Response.Headers["Accept-Ranges"] = result.AcceptRanges ?? "bytes";
+
+        // A probe is a HEAD: headers only, and the upstream body must be closed
+        // or the connection leaks on every item Jellyfin inspects.
+        if (HttpMethods.IsHead(Request.Method))
+        {
+            await result.Body.DisposeAsync().ConfigureAwait(false);
+            return new EmptyResult();
+        }
+
         await using (result.Body)
         {
             await result.Body.CopyToAsync(Response.Body, cancellationToken).ConfigureAwait(false);
         }
 
         return new EmptyResult();
+    }
+
+    private static string? ContentTypeFor(string? fileName, string? fallback)
+    {
+        var extension = System.IO.Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+        return extension switch
+        {
+            ".mkv" => "video/x-matroska",
+            ".mp4" or ".m4v" => "video/mp4",
+            ".avi" => "video/x-msvideo",
+            ".ts" => "video/mp2t",
+            ".webm" => "video/webm",
+            ".mov" => "video/quicktime",
+            _ => fallback,
+        };
     }
 }
