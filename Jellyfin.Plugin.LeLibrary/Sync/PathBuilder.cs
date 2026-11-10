@@ -42,6 +42,16 @@ public static class PathBuilder
     }
 
     /// <summary>
+    /// Builds the plan key the provider and LeLibrary both use for one file.
+    /// </summary>
+    /// <param name="provider">The provider id.</param>
+    /// <param name="itemId">The download id.</param>
+    /// <param name="fileId">The file id inside the download.</param>
+    /// <returns>The key.</returns>
+    public static string Key(string provider, long itemId, long fileId)
+        => string.Create(CultureInfo.InvariantCulture, $"{provider}:{itemId}:{fileId}");
+
+    /// <summary>
     /// Makes one path component safe for Windows, SMB and every NAS a Jellyfin
     /// server might run on.
     /// </summary>
