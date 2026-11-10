@@ -18,6 +18,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - id: pages
+        uses: actions/configure-pages@v5
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
@@ -30,6 +33,7 @@ jobs:
         run: |
           chmod +x scripts/local-repo.sh
           SOURCE_BASE=https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }} \
+            PAGES_BASE=${{ steps.pages.outputs.base_url }} \
             DOTNET=dotnet bash scripts/local-repo.sh
 
       - name: Attach the zips
