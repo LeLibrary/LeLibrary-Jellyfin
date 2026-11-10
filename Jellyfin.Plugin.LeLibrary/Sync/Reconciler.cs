@@ -15,7 +15,8 @@ public sealed record Desired(string Key, string RelativePath, PlanItem Item);
 /// <summary>One file already on disk, with the key stored inside it.</summary>
 /// <param name="Key">The provider-scoped plan key.</param>
 /// <param name="RelativePath">Where the file currently is.</param>
-public sealed record ExistingFile(string Key, string RelativePath);
+/// <param name="PlayUrl">The URL currently inside the file.</param>
+public sealed record ExistingFile(string Key, string RelativePath, string PlayUrl = "");
 
 /// <summary>A file that stays but moves.</summary>
 /// <param name="From">Where it is now.</param>

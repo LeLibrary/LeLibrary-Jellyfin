@@ -3,9 +3,10 @@
 Turn your debrid account into a normal Jellyfin library: movies, shows, seasons
 and episodes, named and matched the way LeLibrary names them.
 
-**Status: in development.** There is no installable release yet. The repository
-below will exist once the first version is tagged; nothing here is ready to
-install.
+**Status: working, not yet released.** The loop is verified end to end on a
+real library (36,000+ files, movies and episodes, Range playback through
+Jellyfin). No release is tagged yet, so there is nothing to install from the
+plugin repository until one is.
 
 ## How it works
 
@@ -31,6 +32,17 @@ server, so its upload bandwidth is the ceiling.
 - The indexed LeLibrary library (a Postgres-backed LeLibrary instance).
 - A debrid account. TorBox is supported first; Real-Debrid, AllDebrid and
   Premiumize follow.
+
+## Docker: set the server URL
+
+Inside the official Jellyfin container, the address Jellyfin reports for itself
+is the container's own interface, which a player cannot reach. Fill **Server
+URL** in the plugin settings with the address players use, for example
+`http://192.168.1.20:8096`. On a native install it can stay empty.
+
+The library folder also has to be a path Jellyfin can see: the default
+`/config/lelibrary` lives in the container's config volume, which is fine, but
+it is not on a media share.
 
 ## Your key is on disk in plain text
 

@@ -35,7 +35,8 @@ public sealed record SyncRequest(string Root, string PlanUrl, string PlayBaseUrl
 /// <param name="Moved">Files renamed.</param>
 /// <param name="Unchanged">Files already right.</param>
 /// <param name="Skipped">Plan items with no matching file in the account.</param>
-public sealed record SyncResult(bool Ok, string? Error, int Added, int Removed, int Moved, int Unchanged, int Skipped);
+/// <param name="Updated">Files whose path was right but whose play URL changed.</param>
+public sealed record SyncResult(bool Ok, string? Error, int Added, int Removed, int Moved, int Unchanged, int Skipped, int Updated = 0);
 
 /// <summary>
 /// One sync: fetch the plan, list the account, reconcile, write.
@@ -118,6 +119,25 @@ public sealed class SyncRunner
         }
 
         var existing = Scan(request.Root);
+        // A .strm whose path still matches but whose URL points at the old
+        // server address (or an old port) must be rewritten, or playback keeps
+        // failing after a settings change. Reconcile cannot see file contents.
+        var byKey = existing.ToDictionary(file => file.Key, StringComparer.Ordinal);
+        var rewrites = new List<Desired>();
+        foreach (var item in desired)
+        {
+            if (!byKey.TryGetValue(item.Key, out var current)) continue;
+            var expected = PlayUrl(request, item);
+            if (string.Equals(current.PlayUrl, expected, StringComparison.Ordinal)) continue;
+            rewrites.Add(item);
+        }
+
+        foreach (var rewrite in rewrites)
+        {
+            var item = rewrite;
+            WriteLibraryFiles(request, item);
+        }
+
         var plan = Reconciler.Reconcile(desired, existing);
 
         foreach (var move in plan.Moves)
@@ -143,9 +163,10 @@ public sealed class SyncRunner
             plan.Writes.Count,
             plan.Deletes.Count,
             plan.Moves.Count,
-            desired.Count - plan.Writes.Count - plan.Moves.Count,
-            skipped);
-        _log?.Invoke($"added {result.Added}, removed {result.Removed}, renamed {result.Moved}, unchanged {result.Unchanged}, skipped {result.Skipped}");
+            desired.Count - plan.Writes.Count - plan.Moves.Count - rewrites.Count,
+            skipped,
+            rewrites.Count);
+        _log?.Invoke($"added {result.Added}, updated {result.Updated}, removed {result.Removed}, renamed {result.Moved}, unchanged {result.Unchanged}, skipped {result.Skipped}");
         return result;
     }
 
@@ -169,15 +190,19 @@ public sealed class SyncRunner
             if (!match.Success) continue;
             found.Add(new ExistingFile(
                 Uri.UnescapeDataString(match.Groups["key"].Value),
-                Relative(root, path)));
+                Relative(root, path),
+                content.Trim()));
         }
 
         return found;
     }
 
+    private static string PlayUrl(SyncRequest request, Desired item)
+        => $"{request.PlayBaseUrl.TrimEnd('/')}/LeLibrary/play/{item.Key}";
+
     private void WriteLibraryFiles(SyncRequest request, Desired write)
     {
-        var playUrl = $"{request.PlayBaseUrl.TrimEnd('/')}/LeLibrary/play/{write.Key}";
+        var playUrl = PlayUrl(request, write);
         WriteAtomic(request.Root, write.RelativePath, playUrl);
 
         var item = write.Item;

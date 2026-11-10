@@ -106,7 +106,11 @@ public sealed class SyncTask : IScheduledTask
         var plans = new LeLibraryClient(http, cachePath);
         var provider = _clients.Create(configuration);
         var runner = new SyncRunner(plans, provider, message => _logger.LogInformation("LeLibrary: {Message}", message));
-        var playBase = _appHost.GetApiUrlForLocalAccess();
+        // In Docker the host reports the container's interface, which a player
+        // cannot reach; the settings page offers an override for exactly that.
+        var playBase = string.IsNullOrWhiteSpace(configuration.ServerUrl)
+            ? _appHost.GetApiUrlForLocalAccess()
+            : configuration.ServerUrl.Trim();
         return runner.RunAsync(new SyncRequest(configuration.LibraryPath, configuration.PlanUrl, playBase), cancellationToken);
     }
 }

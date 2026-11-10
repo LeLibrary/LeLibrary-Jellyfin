@@ -65,7 +65,7 @@ public sealed class AdminController : ControllerBase
 
         var result = await _sync.RunAsync(configuration, cancellationToken).ConfigureAwait(false);
         var message = result.Ok
-            ? $"Added {result.Added}, removed {result.Removed}, renamed {result.Moved}, unchanged {result.Unchanged}, skipped {result.Skipped}."
+            ? $"Added {result.Added}, updated {result.Updated}, removed {result.Removed}, renamed {result.Moved}, unchanged {result.Unchanged}, skipped {result.Skipped}."
             : result.Error ?? "The sync could not run.";
         return Ok(new { ok = result.Ok, message });
     }

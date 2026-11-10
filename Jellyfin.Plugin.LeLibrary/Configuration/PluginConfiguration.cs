@@ -30,6 +30,13 @@ public class PluginConfiguration : BasePluginConfiguration
     public string LibraryPath { get; set; } = "/config/lelibrary";
 
     /// <summary>
+    /// Gets or sets the URL players should use for this server. Empty means the
+    /// address Jellyfin reports for itself, which in Docker is the container's
+    /// own interface and usually unreachable from a player.
+    /// </summary>
+    public string ServerUrl { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets the background sync interval in hours.
     /// </summary>
     public int SyncHours { get; set; } = 6;

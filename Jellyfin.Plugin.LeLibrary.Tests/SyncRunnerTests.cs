@@ -277,6 +277,30 @@ public class SyncRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task AChangedServerUrlRewritesTheStrmWithoutMovingIt()
+    {
+        var plans = new FakePlans();
+        plans.Result = new PlanFetch(true, null, new JellyfinPlan
+        {
+            Provider = "torbox",
+            Items = new[] { Movie("torbox:1:2", "The Matrix", 1999, "The Matrix (1999)/The Matrix (1999).strm") },
+        }, PlanSource.Network, Array.Empty<string>());
+        var provider = new FakeProvider();
+        provider.Listing = new ProviderListing(ProviderHealth.Healthy, new[] { File("torbox:1:2") }, null);
+        var runner = Runner(plans, provider);
+        await runner.RunAsync(new SyncRequest(_root, "https://l.uk/x", "http://old:8096"), CancellationToken.None);
+
+        var result = await runner.RunAsync(new SyncRequest(_root, "https://l.uk/x", "http://new:8096"), CancellationToken.None);
+
+        Assert.Equal(1, result.Updated);
+        Assert.Equal(0, result.Added);
+        Assert.Equal(0, result.Unchanged);
+        Assert.Equal(
+            "http://new:8096/LeLibrary/play/torbox:1:2",
+            System.IO.File.ReadAllText(Path.Combine(_root, "The Matrix (1999)/The Matrix (1999).strm")).Trim());
+    }
+
+    [Fact]
     public async Task FilesWeDidNotWriteAreNeverDeleted()
     {
         var foreign = Path.Combine(_root, "Other", "keep.strm");
