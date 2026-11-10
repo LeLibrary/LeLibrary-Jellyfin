@@ -162,9 +162,10 @@ public sealed class VirtualLibrary
                     continue;
                 }
 
-                // The item points straight at the stream. No file exists: the
-                // media source provider tells Jellyfin the container, which is
-                // what a bare URL otherwise cannot express.
+                // A one-line .strm: Jellyfin reads it and builds the media
+                // source itself, including the container it takes from the
+                // target's extension. That is the same path a scanned library
+                // uses, so nothing about playback is special-cased by us.
                 var playUrl = $"{playBaseUrl.TrimEnd('/')}/LeLibrary/play/{item.Key}/{Uri.EscapeDataString(item.FileName)}";
                 var id = _library.GetNewItemId(playUrl, item.Item.GetType());
                 byPath[item.RelativePath] = item.Item;
