@@ -126,7 +126,7 @@ public class VirtualLibrarySyncTests
     {
         var writer = new FakeLibraryWriter();
         var library = NewLibrary(writer);
-        var result = await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+        var result = await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
         Assert.Equal(1, result.Added);
     }
 
@@ -136,8 +136,8 @@ public class VirtualLibrarySyncTests
         var writer = new FakeLibraryWriter();
         var library = NewLibrary(writer);
         var plan = PlanWithOneMovie();
-        await library.ApplyAsync(plan, MoviesFolder(), ShowsFolder(), "http://host:8096", default);
-        var second = await library.ApplyAsync(plan, MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+        await library.ApplyAsync(plan, MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
+        var second = await library.ApplyAsync(plan, MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
         Assert.Equal(0, second.Added);
         Assert.Equal(0, second.Updated);
         Assert.Equal(0, second.Removed);
@@ -149,9 +149,9 @@ public class VirtualLibrarySyncTests
     {
         var writer = new FakeLibraryWriter();
         var library = NewLibrary(writer);
-        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
         var before = Assert.Single(writer.Items);
-        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://elsewhere:8096", default);
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://elsewhere:8096", true, default);
         var after = Assert.Single(writer.Items, i => i.GetType() == typeof(Movie));
         Assert.Equal(before.Id, after.Id);
     }
@@ -161,8 +161,8 @@ public class VirtualLibrarySyncTests
     {
         var writer = new FakeLibraryWriter();
         var library = NewLibrary(writer);
-        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", default);
-        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://elsewhere:8096", default);
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://elsewhere:8096", true, default);
         Assert.Single(writer.Items, i => i.GetType() == typeof(Movie));
     }
 
@@ -171,13 +171,14 @@ public class VirtualLibrarySyncTests
     {
         var writer = new FakeLibraryWriter();
         var library = NewLibrary(writer);
-        await library.ApplyAsync(PlanWithASeriesOfThreeEpisodes(), MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+        await library.ApplyAsync(PlanWithASeriesOfThreeEpisodes(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
 
         var result = await library.ApplyAsync(
             PlanWithASeriesOfThreeEpisodes(withFirstEpisode: false),
             MoviesFolder(),
             ShowsFolder(),
             "http://host:8096",
+            true,
             default);
 
         Assert.Single(writer.Items, i => i.GetType() == typeof(Series));
@@ -206,8 +207,8 @@ public class VirtualLibrarySyncTests
             },
         });
 
-        await library.ApplyAsync(FreshPlan(), MoviesFolder(), ShowsFolder(), "http://host:8096", default);
-        await library.ApplyAsync(FreshPlan(), MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+        await library.ApplyAsync(FreshPlan(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
+        await library.ApplyAsync(FreshPlan(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
 
         var item = Assert.Single(writer.Items, i => i.GetType() == typeof(Movie));
         Assert.Equal("mkv", item.Container);
@@ -232,7 +233,7 @@ public class VirtualLibrarySyncTests
             },
             new Dictionary<string, string>(StringComparer.Ordinal) { ["torbox:1:2"] = "Movie.2019.1080p.mp4" });
 
-        await library.ApplyAsync(plan, MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+        await library.ApplyAsync(plan, MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
 
         var item = Assert.Single(writer.Items, i => i.GetType() == typeof(Movie));
         Assert.Equal("mp4", item.Container);
@@ -257,7 +258,7 @@ public class VirtualLibrarySyncTests
             },
         });
 
-        await library.ApplyAsync(plan, MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+        await library.ApplyAsync(plan, MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
 
         Assert.Equal(2, writer.Items.Count(i => i.GetType() == typeof(Episode)));
         Assert.Single(writer.Items, i => i.GetType() == typeof(Series));
@@ -282,12 +283,37 @@ public class VirtualLibrarySyncTests
             },
         });
 
-        await library.ApplyAsync(FreshPlan(), MoviesFolder(), ShowsFolder(), "http://host:8096", default);
-        var second = await library.ApplyAsync(FreshPlan(), MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+        await library.ApplyAsync(FreshPlan(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
+        var second = await library.ApplyAsync(FreshPlan(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
 
         Assert.Equal(2, writer.Items.Count(i => i.GetType() == typeof(Episode)));
         Assert.Equal(0, second.Added);
         Assert.Equal(0, second.Removed);
+    }
+
+    [Fact]
+    public async Task APlanThatMayNotRemoveKeepsEverything()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+        await library.ApplyAsync(
+            PlanWithASeriesOfThreeEpisodes(),
+            MoviesFolder(),
+            ShowsFolder(),
+            "http://host:8096",
+            true,
+            default);
+
+        var result = await library.ApplyAsync(
+            PlanWithASeriesOfThreeEpisodes(withFirstEpisode: false),
+            MoviesFolder(),
+            ShowsFolder(),
+            "http://host:8096",
+            false,
+            default);
+
+        Assert.Equal(0, result.Removed);
+        Assert.Equal(3, writer.Items.Count(i => i.GetType() == typeof(Episode)));
     }
 
     /// <summary>
