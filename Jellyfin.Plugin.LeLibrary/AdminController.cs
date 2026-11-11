@@ -39,7 +39,13 @@ public sealed class AdminController : ControllerBase
             return BadRequest(new { ok = false, message = "Enter your debrid API key first." });
         }
 
-        var health = await _clients.Create(configuration).ProbeAsync(cancellationToken).ConfigureAwait(false);
+        var client = _clients.Create(configuration);
+        if (client is null)
+        {
+            return BadRequest(new { ok = false, message = DebridClientFactory.UnsupportedMessage(configuration.Provider) });
+        }
+
+        var health = await client.ProbeAsync(cancellationToken).ConfigureAwait(false);
         var message = health switch
         {
             Providers.ProviderHealth.Healthy => "Key works.",

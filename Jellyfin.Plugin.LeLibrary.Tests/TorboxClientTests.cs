@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.LeLibrary.Configuration;
 using Jellyfin.Plugin.LeLibrary.Providers;
 using Xunit;
 
@@ -13,6 +14,22 @@ namespace Jellyfin.Plugin.LeLibrary.Tests;
 
 public class TorboxClientTests
 {
+    [Fact]
+    public void OnlyTorBoxIsSupported()
+    {
+        using var factory = new DebridClientFactory();
+        Assert.NotNull(factory.Create(new PluginConfiguration { Provider = "torbox", DebridApiKey = "k" }));
+        Assert.Null(factory.Create(new PluginConfiguration { Provider = "realdebrid", DebridApiKey = "k" }));
+    }
+
+    [Fact]
+    public void AnUnsupportedProviderSaysSo()
+    {
+        Assert.Equal(
+            "Real-Debrid is not supported yet. Set the provider to TorBox.",
+            DebridClientFactory.UnsupportedMessage("realdebrid"));
+    }
+
     private sealed class StubHandler : HttpMessageHandler
     {
         private readonly List<(Func<HttpRequestMessage, bool> Match, Func<HttpRequestMessage, HttpResponseMessage> Respond)> _routes = new();
