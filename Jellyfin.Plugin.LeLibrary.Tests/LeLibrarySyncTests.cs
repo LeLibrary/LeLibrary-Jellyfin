@@ -56,6 +56,33 @@ public class LeLibrarySyncTests
     }
 
     [Fact]
+    public void ANewDocumentMeansTheLibraryIsRefreshed()
+    {
+        var configuration = new Configuration.PluginConfiguration { AppliedMetadataEtag = "\"old\"" };
+        var fetch = new MetadataFetch(true, null, Document(), PlanSource.Network, "\"new\"");
+
+        Assert.True(LeLibrarySync.ShouldRefreshMetadata(configuration, fetch));
+    }
+
+    [Fact]
+    public void TheSameDocumentDoesNotRefreshTheLibraryAgain()
+    {
+        var configuration = new Configuration.PluginConfiguration { AppliedMetadataEtag = "\"same\"" };
+        var fetch = new MetadataFetch(true, null, Document(), PlanSource.Network, "\"same\"");
+
+        Assert.False(LeLibrarySync.ShouldRefreshMetadata(configuration, fetch));
+    }
+
+    [Fact]
+    public void AFailedFetchNeverRefreshesTheLibrary()
+    {
+        var configuration = new Configuration.PluginConfiguration();
+        var fetch = new MetadataFetch(false, "down", Document(), PlanSource.Network, "\"new\"");
+
+        Assert.False(LeLibrarySync.ShouldRefreshMetadata(configuration, fetch));
+    }
+
+    [Fact]
     public void AListingWithTwoFilesUnderOneKeyIsRead()
     {
         var files = new[]

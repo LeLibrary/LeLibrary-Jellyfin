@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.LeLibrary.Model;
 using Jellyfin.Plugin.LeLibrary.Providers;
+using Jellyfin.Plugin.LeLibrary.Virtual;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
@@ -143,6 +144,29 @@ public class LeLibraryMetadataProviderTests
 
         Assert.Equal(ItemUpdateType.None, update);
         Assert.Equal("Episode 9", episode.Name);
+    }
+
+    [Fact]
+    public async Task AnEpisodeIsFoundByItsShowsIdWhenJellyfinOverwroteTheEpisodeOne()
+    {
+        // Jellyfin's own TMDb provider sets an episode's Tmdb id to the
+        // episode's own TMDB id, which is not the show's.
+        var episode = new Episode
+        {
+            Name = "Episode 3",
+            IndexNumber = 3,
+            ParentIndexNumber = 1,
+            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Tmdb"] = "1234567",
+                [VirtualIdentity.ShowId] = "63639",
+            },
+        };
+
+        var update = await Provider().FetchAsync(episode, Options(), default);
+
+        Assert.Equal(ItemUpdateType.MetadataEdit, update);
+        Assert.Equal("Remember the Cant", episode.Name);
     }
 
     [Fact]

@@ -128,4 +128,53 @@ public class LeLibraryArtTests
         Assert.Equal("https://image.tmdb.org/t/p/w500/p.jpg", movie.GetImages(ImageType.Primary).Single().Path);
         Assert.Equal("https://artworks.thetvdb.com/e.jpg", episode.GetImages(ImageType.Primary).Single().Path);
     }
+
+    [Fact]
+    public void ASignatureIsStableAndChangesWithTheArt()
+    {
+        var movie = new Movie();
+        LeLibraryArt.Attach(movie, Title(), null);
+        var signature = LeLibraryArt.Signature(movie);
+
+        Assert.Equal(signature, LeLibraryArt.Signature(movie));
+
+        LeLibraryArt.Attach(movie, new MetadataTitle { Poster = "https://other/p.jpg", Backdrop = "https://other/b.jpg" }, null);
+
+        Assert.NotEqual(signature, LeLibraryArt.Signature(movie));
+    }
+
+    [Fact]
+    public void TheSignatureIsOfWhatThePluginWritesNotOfWhatJellyfinSaved()
+    {
+        var wanted = new Movie();
+        LeLibraryArt.Attach(wanted, Title(), null);
+        var wantedSignature = LeLibraryArt.Signature(wanted);
+
+        var current = new Movie();
+        LeLibraryArt.ApplyPerType(current, wanted);
+        // Jellyfin downloads the image on first request and rewrites the path
+        // to the file it saved. That is why the sync compares the desired
+        // item's signature with the one it stored, and never recomputes it
+        // from the row.
+        current.ImageInfos[0].Path = "/config/metadata/library/aa/aa-poster.jpg";
+
+        Assert.Equal(wantedSignature, LeLibraryArt.Signature(wanted));
+        Assert.NotEqual(wantedSignature, LeLibraryArt.Signature(current));
+    }
+
+    [Fact]
+    public void ApplyingOneTypeLeavesTheOthersAlone()
+    {
+        var episode = new Episode();
+        LeLibraryArt.Attach(episode, Title(), Episode());
+        var still = episode.GetImages(ImageType.Primary).Single().Path;
+
+        // The document has nothing for it this time, so the wanted item has no
+        // images at all.
+        var wanted = new Episode();
+
+        LeLibraryArt.ApplyPerType(episode, wanted);
+
+        Assert.Equal(still, episode.GetImages(ImageType.Primary).Single().Path);
+    }
 }

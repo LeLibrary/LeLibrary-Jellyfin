@@ -17,6 +17,61 @@ namespace Jellyfin.Plugin.LeLibrary.Providers;
 /// </summary>
 public static class LeLibraryArt
 {
+    /// <summary>
+    /// The provider id holding the signature of the art the plugin wrote.
+    ///
+    /// Jellyfin downloads a non-local image on the first request and rewrites
+    /// the item's path to the file it saved, so the item's own paths can never
+    /// be compared with the document again. This records what was written, so
+    /// a sync can tell "the art changed" from "Jellyfin saved it".
+    /// </summary>
+    public const string SignatureId = "LeLibraryArt";
+
+    /// <summary>
+    /// The signature of an item's art: its type and URL pairs, sorted. Computed
+    /// from the item the plan built, never from a row Jellyfin has touched.
+    /// </summary>
+    /// <param name="item">The item.</param>
+    /// <returns>The signature, or an empty string when the item has no art.</returns>
+    public static string Signature(BaseItem item)
+        => string.Join(
+            ";",
+            (item.ImageInfos ?? Array.Empty<ItemImageInfo>())
+                .OrderBy(image => image.Type)
+                .ThenBy(image => image.Path, StringComparer.Ordinal)
+                .Select(image => ((int)image.Type).ToString(System.Globalization.CultureInfo.InvariantCulture) + "=" + image.Path));
+
+    /// <summary>
+    /// Copies the wanted item's images onto a row, one type at a time.
+    ///
+    /// A type the wanted item has nothing for is left alone, so a metadata
+    /// outage — which leaves the wanted item with the plan's poster and
+    /// nothing else — cannot strip the artwork a row already has.
+    /// </summary>
+    /// <param name="current">The row.</param>
+    /// <param name="wanted">The item the plan built.</param>
+    /// <returns>True when an image was written.</returns>
+    public static bool ApplyPerType(BaseItem current, BaseItem wanted)
+    {
+        var changed = false;
+        foreach (var image in wanted.ImageInfos ?? Array.Empty<ItemImageInfo>())
+        {
+            var images = current.ImageInfos ?? Array.Empty<ItemImageInfo>();
+            var existing = images.Where(row => row.Type == image.Type).ToList();
+            if (existing.Count == 1 && string.Equals(existing[0].Path, image.Path, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var kept = images.Where(row => row.Type != image.Type).ToList();
+            kept.Add(new ItemImageInfo { Path = image.Path, Type = image.Type });
+            current.ImageInfos = kept.ToArray();
+            changed = true;
+        }
+
+        return changed;
+    }
+
     /// <summary>Attaches the document's art to an item, looking it up by the item's own ids.</summary>
     /// <param name="item">The item.</param>
     /// <param name="document">The document.</param>

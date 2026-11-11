@@ -22,14 +22,21 @@ namespace Jellyfin.Plugin.LeLibrary.Tests;
 public class VirtualLibrarySyncTests
 {
     private static VirtualLibrary NewLibrary(ILibraryWriter writer)
-        => new(
+        => NewLibrary(writer, out _);
+
+    private static VirtualLibrary NewLibrary(ILibraryWriter writer, out ProviderManagerProxy? queue)
+    {
+        var manager = DispatchProxy.Create<IProviderManager, ProviderManagerProxy>();
+        queue = (ProviderManagerProxy)(object)manager;
+        return new VirtualLibrary(
             null!,
-            ProviderManager(),
+            manager,
             writer,
             // The diff never touches the file system; Jellyfin's directory
             // service only carries it.
             null!,
             NullLogger<VirtualLibrary>.Instance);
+    }
 
     private static Folder MoviesFolder() => new() { Id = Guid.NewGuid(), Name = "Movies" };
 
@@ -533,6 +540,87 @@ public class VirtualLibrarySyncTests
         Assert.Equal(1, second.Unchanged);
     }
 
+    [Fact]
+    public async Task AMetadataOutageKeepsTheArtwork()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default, Document());
+        var movie = Assert.Single(writer.Items, i => i.GetType() == typeof(Movie));
+
+        // The next sync cannot reach the metadata route at all.
+        var second = await library.ApplyAsync(
+            PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default, metadata: null);
+
+        Assert.Equal(0, second.Updated);
+        Assert.Equal("https://image.tmdb.org/t/p/w500/p.jpg", movie.GetImages(ImageType.Primary).Single().Path);
+        Assert.Equal("https://image.tmdb.org/t/p/w1280/b.jpg", movie.GetImages(ImageType.Backdrop).Single().Path);
+    }
+
+    [Fact]
+    public async Task AnImageJellyfinSavedIsNotAChange()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default, Document());
+        var movie = Assert.Single(writer.Items, i => i.GetType() == typeof(Movie));
+
+        // Jellyfin downloaded the poster on first request and now points at
+        // its own copy.
+        movie.ImageInfos[0].Path = "/config/metadata/library/aa/aa-poster.jpg";
+
+        var second = await library.ApplyAsync(
+            PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default, Document());
+
+        Assert.Equal(0, second.Updated);
+        Assert.Equal(1, second.Unchanged);
+    }
+
+    [Fact]
+    public async Task ANewDocumentRefreshesEveryTitleOnce()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer, out var queue);
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
+        var movie = Assert.Single(writer.Items, i => i.GetType() == typeof(Movie));
+        queue!.Queued.Clear();
+
+        await library.ApplyAsync(
+            PlanWithOneMovie(),
+            MoviesFolder(),
+            ShowsFolder(),
+            "http://host:8096",
+            true,
+            default,
+            Document(),
+            refreshMetadata: true);
+
+        // The item already existed, so nothing was created — but the metadata
+        // provider only runs on a refresh, so it is queued for this one.
+        Assert.Contains(movie.Id, queue.Queued);
+    }
+
+    [Fact]
+    public async Task AnUnchangedDocumentQueuesNoRefresh()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer, out var queue);
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default, Document());
+        queue!.Queued.Clear();
+
+        await library.ApplyAsync(
+            PlanWithOneMovie(),
+            MoviesFolder(),
+            ShowsFolder(),
+            "http://host:8096",
+            true,
+            default,
+            Document(),
+            refreshMetadata: false);
+
+        Assert.Empty(queue.Queued);
+    }
+
     /// <summary>
     /// A provider manager that only answers the one call the sync makes.
     /// </summary>
@@ -546,11 +634,15 @@ public class VirtualLibrarySyncTests
 /// </summary>
 public class ProviderManagerProxy : DispatchProxy
 {
+    /// <summary>Gets the ids whose metadata was queued.</summary>
+    public List<Guid> Queued { get; } = new();
+
     /// <inheritdoc />
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
     {
         if (targetMethod?.Name == "QueueRefresh")
         {
+            Queued.Add((Guid)args![0]!);
             return null;
         }
 

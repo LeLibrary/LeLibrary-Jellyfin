@@ -32,6 +32,14 @@ public class PluginConfiguration : BasePluginConfiguration
     public string ServerUrl { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the metadata document's ETag that has already been applied
+    /// to the library. A new one means every title in the library is refreshed
+    /// once, which is how an upgrade picks up metadata for items that already
+    /// existed.
+    /// </summary>
+    public string AppliedMetadataEtag { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets the background sync interval in hours.
     /// </summary>
     public int SyncHours { get; set; } = 6;

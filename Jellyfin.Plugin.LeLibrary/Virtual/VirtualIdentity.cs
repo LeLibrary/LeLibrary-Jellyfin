@@ -21,6 +21,13 @@ public static class VirtualIdentity
     public const string SeasonId = "LeLibrarySeason";
 
     /// <summary>
+    /// Provider id holding the show's TMDB id on a series, season and episode.
+    /// Jellyfin's own TMDb provider overwrites an episode's <c>Tmdb</c> id with
+    /// the episode's own, so the show's id needs a home of its own.
+    /// </summary>
+    public const string ShowId = "LeLibraryTmdb";
+
+    /// <summary>
     /// Relative path for a movie or episode. The extension only exists so
     /// Jellyfin treats it as a video file; nothing is written to disk.
     /// </summary>

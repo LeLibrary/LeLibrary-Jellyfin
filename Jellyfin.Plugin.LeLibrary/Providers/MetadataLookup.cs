@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Jellyfin.Plugin.LeLibrary.Model;
+using Jellyfin.Plugin.LeLibrary.Virtual;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
@@ -37,8 +38,18 @@ public static class MetadataLookup
 
         // A film is looked up as a film; a show, a season and an episode all
         // belong to a show.
-        var kind = item is Movie ? "movie" : "tv";
-        return document.Find(kind, Number(item, Tmdb), Text(item, Imdb), Text(item, Tvdb));
+        if (item is Movie)
+        {
+            return document.Find("movie", Number(item, Tmdb), Text(item, Imdb), Number(item, Tvdb));
+        }
+
+        // The show's TMDB id, kept in an id of our own: Jellyfin's TMDb
+        // provider overwrites an episode's Tmdb id with the episode's own,
+        // which is not the show's.
+        var show = Number(item, VirtualIdentity.ShowId);
+        return show is not null
+            ? document.Find("tv", show, null, null) ?? document.Find("tv", Number(item, Tmdb), Text(item, Imdb), Number(item, Tvdb))
+            : document.Find("tv", Number(item, Tmdb), Text(item, Imdb), Number(item, Tvdb));
     }
 
     /// <summary>The episode's entry under its show, or null when it has none.</summary>

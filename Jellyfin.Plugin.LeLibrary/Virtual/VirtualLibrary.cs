@@ -157,8 +157,9 @@ public sealed class VirtualLibrary
     /// <param name="allowRemovals">Whether items that are no longer wanted may be deleted. A plan that came from a cache may not remove anything.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <param name="metadata">The metadata document, when a sync fetched one.</param>
+    /// <param name="refreshMetadata">Whether every title in the plan should be refreshed, not just the new items.</param>
     /// <returns>What changed.</returns>
-    public Task<VirtualSyncResult> ApplyAsync(VirtualLibraryPlan desired, Folder moviesRoot, Folder showsRoot, string playBaseUrl, bool allowRemovals, CancellationToken cancellationToken, MetadataDocument? metadata = null)
+    public Task<VirtualSyncResult> ApplyAsync(VirtualLibraryPlan desired, Folder moviesRoot, Folder showsRoot, string playBaseUrl, bool allowRemovals, CancellationToken cancellationToken, MetadataDocument? metadata = null, bool refreshMetadata = false)
     {
         var existing = LoadExisting();
         // Grouped by parent: CreateItems takes one parent for the whole batch,
@@ -225,7 +226,13 @@ public sealed class VirtualLibrary
                     }
 
                     var pathChanged = !string.Equals(current.Path, playUrl, StringComparison.Ordinal);
-                    var changed = pathChanged || NeedsUpdate(current, item.Item);
+
+                    // Compared against what the plugin wrote last time, never
+                    // against the row's own paths: Jellyfin localises an image
+                    // on first request and rewrites the path to its file.
+                    var artChanged = metadata is not null
+                        && !string.Equals(ArtSignatureOf(current), LeLibraryArt.Signature(item.Item), StringComparison.Ordinal);
+                    var changed = pathChanged || artChanged || NeedsUpdate(current, item.Item);
                     if (pathChanged)
                     {
                         // An old .strm file, if an even older version wrote one.
@@ -242,12 +249,16 @@ public sealed class VirtualLibrary
                     current.IndexNumber = item.Item.IndexNumber;
                     current.ParentIndexNumber = item.Item.ParentIndexNumber;
                     current.Container = item.Item.Container;
-                    if (ImagesDiffer(current, item.Item))
+                    if (artChanged)
                     {
-                        current.ImageInfos = item.Item.ImageInfos;
+                        LeLibraryArt.ApplyPerType(current, item.Item);
                     }
 
                     MergeProviderIds(current, item.Item);
+                    if (artChanged)
+                    {
+                        current.ProviderIds[LeLibraryArt.SignatureId] = LeLibraryArt.Signature(item.Item);
+                    }
                     if (changed)
                     {
                         _writer.UpdateItem(current);
@@ -276,6 +287,13 @@ public sealed class VirtualLibrary
                 item.Item.DateCreated = DateTime.UtcNow;
                 item.Item.DateModified = DateTime.UtcNow;
                 item.Item.PresentationUniqueKey = item.Item.Id.ToString("N", System.Globalization.CultureInfo.InvariantCulture);
+                if (metadata is not null)
+                {
+                    // Remember what art was written, so the next sync can tell
+                    // a change from Jellyfin's own local copy of the image.
+                    item.Item.ProviderIds[LeLibraryArt.SignatureId] = LeLibraryArt.Signature(item.Item);
+                }
+
                 created.Add((parent, item.Item));
                 byPath[item.RelativePath] = item.Item;
             }
@@ -306,7 +324,19 @@ public sealed class VirtualLibrary
         // fetches those from the providers (TMDB, TVDB) using the ids we set.
         // Queue that work instead of doing it inline, or the sync would block
         // on thousands of HTTP calls.
-        QueueMetadataRefresh(created);
+        //
+        // A metadata provider only runs when an item is refreshed, and an
+        // existing item is never refreshed for its own sake — so a document the
+        // library has not seen yet refreshes every title once. That is how an
+        // upgrade picks up metadata for the items that already existed.
+        if (refreshMetadata)
+        {
+            QueueMetadataRefresh(desired.Movies.Select(item => item.Item).Concat(desired.Series.Select(item => item.Item)));
+        }
+        else
+        {
+            QueueMetadataRefresh(created.Select(entry => entry.Item));
+        }
 
         var removed = RemoveStale(desired, existing, duplicates, allowRemovals);
         _log.LogInformation(
@@ -315,7 +345,7 @@ public sealed class VirtualLibrary
         return Task.FromResult(new VirtualSyncResult(created.Count, updated, removed, unchanged, desired.Skipped));
     }
 
-    private void QueueMetadataRefresh(IEnumerable<(BaseItem Parent, BaseItem Item)> created)
+    private void QueueMetadataRefresh(IEnumerable<BaseItem> items)
     {
         var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
         {
@@ -327,9 +357,10 @@ public sealed class VirtualLibrary
 
         // Movies and series only: a series refresh pulls its seasons and
         // episodes with it, so queueing those separately triples the work.
-        foreach (var (_, item) in created)
+        foreach (var item in items)
         {
             if (item is not (Movie or Series)) continue;
+            if (item.Id == Guid.Empty) continue;
             _providers.QueueRefresh(item.Id, options, RefreshPriority.Normal);
         }
     }
@@ -398,33 +429,15 @@ public sealed class VirtualLibrary
             || current.ProductionYear != wanted.ProductionYear
             || current.IndexNumber != wanted.IndexNumber
             || current.ParentIndexNumber != wanted.ParentIndexNumber
-            || ProviderIdsDiffer(current, wanted)
-            || ImagesDiffer(current, wanted);
+            || ProviderIdsDiffer(current, wanted);
 
-    /// <summary>Whether the row's images are not the ones the plan wants.</summary>
-    /// <param name="current">The row.</param>
-    /// <param name="wanted">The item the plan built.</param>
-    /// <returns>True when the images have to be rewritten.</returns>
-    private static bool ImagesDiffer(BaseItem current, BaseItem wanted)
-    {
-        var mine = current.ImageInfos ?? Array.Empty<ItemImageInfo>();
-        var theirs = wanted.ImageInfos ?? Array.Empty<ItemImageInfo>();
-        if (mine.Length != theirs.Length)
-        {
-            return true;
-        }
-
-        for (var index = 0; index < mine.Length; index++)
-        {
-            if (mine[index].Type != theirs[index].Type
-                || !string.Equals(mine[index].Path, theirs[index].Path, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    /// <summary>The signature of the art the plugin last wrote to a row.</summary>
+    /// <param name="item">The row.</param>
+    /// <returns>The signature, or null when the plugin has not written one.</returns>
+    private static string? ArtSignatureOf(BaseItem item)
+        => item.ProviderIds is not null && item.ProviderIds.TryGetValue(LeLibraryArt.SignatureId, out var value)
+            ? value
+            : null;
 
     /// <summary>
     /// Whether the row's ids are not the ones the plan wants.

@@ -116,7 +116,7 @@ public static class VirtualItemFactory
             ProductionYear = item.SeriesYear,
             IsVirtualItem = false,
             Container = VirtualIdentity.ContainerOf(fileName),
-            ProviderIds = ProviderIds(item, VirtualIdentity.SeriesId, key),
+            ProviderIds = ProviderIds(item, VirtualIdentity.SeriesId, key, VirtualIdentity.ShowId),
         };
         AttachArt(series, item);
         return new VirtualItem(relative, null, key, fileName, series, key);
@@ -132,10 +132,7 @@ public static class VirtualItemFactory
             IndexNumber = item.Season,
             IsVirtualItem = false,
             Container = VirtualIdentity.ContainerOf(fileName),
-            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                [VirtualIdentity.SeasonId] = key,
-            },
+            ProviderIds = ProviderIds(item, VirtualIdentity.SeasonId, key, VirtualIdentity.ShowId),
         };
         return new VirtualItem(relative, seriesRelative, key, fileName, season, key);
     }
@@ -155,7 +152,7 @@ public static class VirtualItemFactory
             Container = VirtualIdentity.ContainerOf(fileName),
             // The provider id holds the identity, so the row can be found
             // again by what it is.
-            ProviderIds = ProviderIds(item, VirtualIdentity.ProviderId, identity),
+            ProviderIds = ProviderIds(item, VirtualIdentity.ProviderId, identity, VirtualIdentity.ShowId),
         };
         return new VirtualItem(relative, seasonRelative, item.Key, fileName, episode, identity);
     }
@@ -175,12 +172,17 @@ public static class VirtualItemFactory
         }
     }
 
-    private static Dictionary<string, string> ProviderIds(PlanItem item, string name, string value)
+    private static Dictionary<string, string> ProviderIds(PlanItem item, string name, string value, string? showIdName = null)
     {
         var ids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             [name] = value,
         };
+        if (showIdName is not null && item.TmdbId is > 0)
+        {
+            ids[showIdName] = item.TmdbId.Value.ToString(CultureInfo.InvariantCulture);
+        }
+
         if (item.TmdbId is > 0) ids["Tmdb"] = item.TmdbId.Value.ToString(CultureInfo.InvariantCulture);
         if (item.TvdbId is > 0) ids["Tvdb"] = item.TvdbId.Value.ToString(CultureInfo.InvariantCulture);
         if (!string.IsNullOrWhiteSpace(item.ImdbId)) ids["Imdb"] = item.ImdbId!;

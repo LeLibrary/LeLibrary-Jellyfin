@@ -95,21 +95,19 @@ public sealed class MetadataDocument
     /// <param name="imdbId">The IMDb id.</param>
     /// <param name="tvdbId">The TVDB id.</param>
     /// <returns>The title, or null when the document has none.</returns>
-    public MetadataTitle? Find(string kind, int? tmdbId, string? imdbId, string? tvdbId)
+    public MetadataTitle? Find(string kind, int? tmdbId, string? imdbId, int? tvdbId)
     {
-        foreach (var id in new[]
+        // The TMDB and IMDb forms are unambiguous (an IMDb id starts with
+        // "tt"); a TVDB id is a bare number and is namespaced so it cannot
+        // collide with another title's TMDB id.
+        foreach (var key in new[]
         {
-            tmdbId?.ToString(CultureInfo.InvariantCulture),
-            imdbId,
-            tvdbId,
+            tmdbId is null ? null : kind + ":" + tmdbId.Value.ToString(CultureInfo.InvariantCulture),
+            string.IsNullOrWhiteSpace(imdbId) ? null : kind + ":" + imdbId,
+            tvdbId is null ? null : kind + ":tvdb:" + tvdbId.Value.ToString(CultureInfo.InvariantCulture),
         })
         {
-            if (string.IsNullOrWhiteSpace(id))
-            {
-                continue;
-            }
-
-            if (Titles.TryGetValue(kind + ":" + id, out var title))
+            if (key is not null && Titles.TryGetValue(key, out var title))
             {
                 return title;
             }

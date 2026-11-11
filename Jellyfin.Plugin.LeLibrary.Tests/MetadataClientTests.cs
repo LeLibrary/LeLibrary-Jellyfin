@@ -184,4 +184,21 @@ public class MetadataClientTests : IDisposable
         Assert.Null(document.Find("tv", 999, "tt0133093", null));
         Assert.Null(document.Find("movie", null, null, null));
     }
+
+    [Fact]
+    public void AFindLooksForATvdbIdUnderItsOwnNamespace()
+    {
+        var document = new MetadataDocument
+        {
+            Titles = new System.Collections.Generic.Dictionary<string, MetadataTitle>
+            {
+                ["movie:tvdb:603"] = new() { Kind = "movie", Title = "A TVDB-only title" },
+            },
+        };
+
+        // 603 is also a TMDB id in the wild; the TVDB fallback must not find
+        // the other title.
+        Assert.Null(document.Find("movie", 603, null, null));
+        Assert.NotNull(document.Find("movie", null, null, 603));
+    }
 }
