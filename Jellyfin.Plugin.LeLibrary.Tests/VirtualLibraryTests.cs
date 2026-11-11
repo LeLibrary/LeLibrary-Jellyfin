@@ -144,4 +144,47 @@ public class VirtualLibraryTests
 
         Assert.Contains("Some Show (2020)", plan.Series[0].RelativePath, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ASeriesAndItsSeasonsCarryTheirOwnIds()
+    {
+        var plan = VirtualItemFactory.Build(new JellyfinPlan
+        {
+            Items = new[] { Episode("torbox:7:2", "The Expanse", 2015, 1, 3) },
+        });
+
+        var series = Assert.Single(plan.Series);
+        Assert.Equal("series:63639", series.Identity);
+        Assert.Equal("series:63639", series.Item.ProviderIds[VirtualIdentity.SeriesId]);
+        // The series keeps the external ids: Jellyfin's own providers look the
+        // title up by them.
+        Assert.Equal("63639", series.Item.ProviderIds["Tmdb"]);
+        // It must not carry the plan key of one of its episodes.
+        Assert.False(series.Item.ProviderIds.ContainsKey(VirtualIdentity.ProviderId));
+
+        var season = Assert.Single(plan.Seasons);
+        Assert.Equal("series:63639:season:1", season.Identity);
+        Assert.Equal("series:63639:season:1", season.Item.ProviderIds[VirtualIdentity.SeasonId]);
+    }
+
+    [Fact]
+    public void AMovieAndAnEpisodeKeepTheirPlanKeyAsTheirIdentity()
+    {
+        var plan = VirtualItemFactory.Build(new JellyfinPlan
+        {
+            Items = new[]
+            {
+                Movie("torbox:1:2", "The Matrix", 1999),
+                Episode("torbox:7:2", "The Expanse", 2015, 1, 3),
+            },
+        });
+
+        var movie = Assert.Single(plan.Movies);
+        Assert.Equal("torbox:1:2", movie.Identity);
+        Assert.Equal("torbox:1:2", movie.Item.ProviderIds[VirtualIdentity.ProviderId]);
+
+        var episode = Assert.Single(plan.Episodes);
+        Assert.Equal("torbox:7:2", episode.Identity);
+        Assert.Equal("torbox:7:2", episode.Item.ProviderIds[VirtualIdentity.ProviderId]);
+    }
 }

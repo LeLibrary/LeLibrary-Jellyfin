@@ -94,7 +94,8 @@ public static class VirtualIdentity
 /// <param name="ParentRelativePath">Its parent's relative path, or null for the library root.</param>
 /// <param name="Key">Its stable key.</param>
 /// <param name="Item">The populated item.</param>
-public sealed record VirtualItem(string RelativePath, string? ParentRelativePath, string Key, string FileName, MediaBrowser.Controller.Entities.BaseItem Item);
+/// <param name="Identity">What the item is, and never where it is served from.</param>
+public sealed record VirtualItem(string RelativePath, string? ParentRelativePath, string Key, string FileName, MediaBrowser.Controller.Entities.BaseItem Item, string? Identity = null);
 
 /// <summary>A whole desired library, parents first.</summary>
 /// <param name="Movies">Movies.</param>

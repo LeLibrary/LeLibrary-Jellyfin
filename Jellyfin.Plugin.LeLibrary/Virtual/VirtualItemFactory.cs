@@ -39,14 +39,14 @@ public static class VirtualItemFactory
                     continue;
                 }
 
-                var seriesKey = SeriesKey(item);
+                var seriesKey = ItemIdentity.SeriesKey(item);
                 if (!series.TryGetValue(seriesKey, out var seriesItem))
                 {
                     seriesItem = Series(item, seriesKey);
                     series[seriesKey] = seriesItem;
                 }
 
-                var seasonKey = $"{seriesKey}:season:{item.Season.Value.ToString(CultureInfo.InvariantCulture)}";
+                var seasonKey = ItemIdentity.SeasonKey(seriesKey, item.Season.Value);
                 if (!seasons.TryGetValue(seasonKey, out var seasonItem))
                 {
                     seasonItem = Season(item, seasonKey, seriesItem.RelativePath);
@@ -66,10 +66,7 @@ public static class VirtualItemFactory
     /// <summary>The stable key of a series.</summary>
     /// <param name="item">Any episode of the series.</param>
     /// <returns>The key.</returns>
-    public static string SeriesKey(PlanItem item)
-        => item.TmdbId is > 0
-            ? "series:" + item.TmdbId.Value.ToString(CultureInfo.InvariantCulture)
-            : "series:" + (item.SeriesTitle ?? "unknown").Trim().ToLowerInvariant().Replace(' ', '-');
+    public static string SeriesKey(PlanItem item) => ItemIdentity.SeriesKey(item);
 
     private static VirtualItem Movie(PlanItem item)
     {
@@ -80,10 +77,10 @@ public static class VirtualItemFactory
             ProductionYear = item.Year,
             IsVirtualItem = false,
             IsInMixedFolder = true,
-            ProviderIds = ProviderIds(item),
+            ProviderIds = ProviderIds(item, VirtualIdentity.ProviderId, item.Key),
         };
         AttachArt(movie, item);
-        return new VirtualItem(relative, null, item.Key, VirtualIdentity.PlayFileName(item.Path, item.Title, item.Year), movie);
+        return new VirtualItem(relative, null, item.Key, VirtualIdentity.PlayFileName(item.Path, item.Title, item.Year), movie, item.Key);
     }
 
     private static VirtualItem Series(PlanItem item, string key)
@@ -94,10 +91,10 @@ public static class VirtualItemFactory
             Name = item.SeriesTitle!,
             ProductionYear = item.SeriesYear,
             IsVirtualItem = false,
-            ProviderIds = ProviderIds(item),
+            ProviderIds = ProviderIds(item, VirtualIdentity.SeriesId, key),
         };
         AttachArt(series, item);
-        return new VirtualItem(relative, null, key, VirtualIdentity.PlayFileName(null, item.SeriesTitle, item.SeriesYear), series);
+        return new VirtualItem(relative, null, key, VirtualIdentity.PlayFileName(null, item.SeriesTitle, item.SeriesYear), series, key);
     }
 
     private static VirtualItem Season(PlanItem item, string key, string seriesRelative)
@@ -108,8 +105,12 @@ public static class VirtualItemFactory
             Name = "Season " + item.Season.Value.ToString(CultureInfo.InvariantCulture),
             IndexNumber = item.Season,
             IsVirtualItem = false,
+            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [VirtualIdentity.SeasonId] = key,
+            },
         };
-        return new VirtualItem(relative, seriesRelative, key, VirtualIdentity.PlayFileName(null, item.SeriesTitle, item.SeriesYear) + ".mkv", season);
+        return new VirtualItem(relative, seriesRelative, key, VirtualIdentity.PlayFileName(null, item.SeriesTitle, item.SeriesYear) + ".mkv", season, key);
     }
 
     private static VirtualItem Episode(PlanItem item, string seasonRelative)
@@ -123,9 +124,9 @@ public static class VirtualItemFactory
             IndexNumber = item.Episode,
             ParentIndexNumber = item.Season,
             IsVirtualItem = false,
-            ProviderIds = ProviderIds(item),
+            ProviderIds = ProviderIds(item, VirtualIdentity.ProviderId, item.Key),
         };
-        return new VirtualItem(relative, seasonRelative, item.Key, VirtualIdentity.PlayFileName(item.Path, item.SeriesTitle, item.SeriesYear), episode);
+        return new VirtualItem(relative, seasonRelative, item.Key, VirtualIdentity.PlayFileName(item.Path, item.SeriesTitle, item.SeriesYear), episode, item.Key);
     }
 
     /// <summary>Attaches the poster and backdrop LeLibrary chose to an item.</summary>
@@ -143,11 +144,11 @@ public static class VirtualItemFactory
         }
     }
 
-    private static Dictionary<string, string> ProviderIds(PlanItem item)
+    private static Dictionary<string, string> ProviderIds(PlanItem item, string name, string value)
     {
         var ids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            [VirtualIdentity.ProviderId] = item.Key,
+            [name] = value,
         };
         if (item.TmdbId is > 0) ids["Tmdb"] = item.TmdbId.Value.ToString(CultureInfo.InvariantCulture);
         if (item.TvdbId is > 0) ids["Tvdb"] = item.TvdbId.Value.ToString(CultureInfo.InvariantCulture);
