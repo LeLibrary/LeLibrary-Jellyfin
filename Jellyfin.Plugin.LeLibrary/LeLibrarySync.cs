@@ -66,6 +66,15 @@ public sealed class LeLibrarySync
             return new SyncOutcome(false, "set the LeLibrary URL and your debrid key first", null);
         }
 
+        // Before anything else: a provider the plugin cannot talk to is the
+        // user's mistake, and saying so is more useful than whatever the plan
+        // fetch would complain about.
+        var provider = _clients.Create(configuration);
+        if (provider is null)
+        {
+            return new SyncOutcome(false, DebridClientFactory.UnsupportedMessage(configuration.Provider), null);
+        }
+
         var cachePath = Path.Combine(_paths.PluginConfigurationsPath, "lelibrary-plan.json");
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("LeLibrary-Jellyfin/0.1");
@@ -74,12 +83,6 @@ public sealed class LeLibrarySync
         if (!fetch.Ok)
         {
             return new SyncOutcome(false, fetch.Error ?? "the plan could not be read", null);
-        }
-
-        var provider = _clients.Create(configuration);
-        if (provider is null)
-        {
-            return new SyncOutcome(false, DebridClientFactory.UnsupportedMessage(configuration.Provider), null);
         }
 
         if (!string.IsNullOrEmpty(fetch.Plan.Provider) && !string.Equals(fetch.Plan.Provider, provider.Provider, StringComparison.Ordinal))
