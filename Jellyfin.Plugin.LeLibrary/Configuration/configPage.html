@@ -20,10 +20,14 @@
                     <label class="selectLabel" for="debridProvider">Debrid provider</label>
                     <select is="emby-select" id="debridProvider" name="Provider" class="emby-select-withcolor emby-select">
                         <option value="torbox">TorBox</option>
-                        <option value="realdebrid">Real-Debrid</option>
-                        <option value="alldebrid">AllDebrid</option>
-                        <option value="premiumize">Premiumize</option>
+                        <option value="realdebrid" disabled>Real-Debrid (not supported yet)</option>
+                        <option value="alldebrid" disabled>AllDebrid (not supported yet)</option>
+                        <option value="premiumize" disabled>Premiumize (not supported yet)</option>
                     </select>
+                    <div class="fieldDescription">
+                        TorBox is the only debrid provider the plugin talks to so far. The others are
+                        listed so it is clear they are coming, not forgotten.
+                    </div>
                 </div>
 
                 <div class="inputContainer">

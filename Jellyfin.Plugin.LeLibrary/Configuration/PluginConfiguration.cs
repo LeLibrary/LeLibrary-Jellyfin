@@ -25,11 +25,6 @@ public class PluginConfiguration : BasePluginConfiguration
     public string PlanUrl { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the folder the .strm and .nfo files are written to.
-    /// </summary>
-    public string LibraryPath { get; set; } = "/config/lelibrary";
-
-    /// <summary>
     /// Gets or sets the URL players should use for this server. Empty means the
     /// address Jellyfin reports for itself, which in Docker is the container's
     /// own interface and usually unreachable from a player.

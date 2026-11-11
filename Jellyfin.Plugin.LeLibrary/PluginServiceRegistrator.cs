@@ -17,27 +17,36 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
         _ = applicationHost;
-        serviceCollection.AddSingleton<DebridClientFactory>();
+        serviceCollection.AddSingleton(sp => new DebridClientFactory(sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<DebridClientFactory>>()));
         serviceCollection.AddSingleton<IDebridClient>(sp =>
         {
             var configuration = Plugin.Instance?.Configuration
                 ?? throw new InvalidOperationException("the LeLibrary plugin is not loaded yet");
-            return sp.GetRequiredService<DebridClientFactory>().Create(configuration);
+            return sp.GetRequiredService<DebridClientFactory>().Create(configuration)
+                ?? throw new InvalidOperationException(DebridClientFactory.UnsupportedMessage(configuration.Provider));
         });
         serviceCollection.AddSingleton(sp => new LinkCache(() =>
         {
             var configuration = Plugin.Instance?.Configuration;
-            return configuration is null
-                ? throw new InvalidOperationException("the LeLibrary plugin is not loaded yet")
-                : sp.GetRequiredService<DebridClientFactory>().Create(configuration);
+            if (configuration is null)
+            {
+                throw new InvalidOperationException("the LeLibrary plugin is not loaded yet");
+            }
+
+            return sp.GetRequiredService<DebridClientFactory>().Create(configuration)
+                ?? throw new InvalidOperationException(DebridClientFactory.UnsupportedMessage(configuration.Provider));
         }));
         serviceCollection.AddSingleton(sp => new PlaybackProxy(
             () =>
             {
                 var configuration = Plugin.Instance?.Configuration;
-                return configuration is null
-                    ? throw new InvalidOperationException("the LeLibrary plugin is not loaded yet")
-                    : sp.GetRequiredService<DebridClientFactory>().Create(configuration);
+                if (configuration is null)
+                {
+                    throw new InvalidOperationException("the LeLibrary plugin is not loaded yet");
+                }
+
+                return sp.GetRequiredService<DebridClientFactory>().Create(configuration)
+                    ?? throw new InvalidOperationException(DebridClientFactory.UnsupportedMessage(configuration.Provider));
             },
             sp.GetRequiredService<LinkCache>(),
             // Streaming client: no timeout, no buffering. The default client's

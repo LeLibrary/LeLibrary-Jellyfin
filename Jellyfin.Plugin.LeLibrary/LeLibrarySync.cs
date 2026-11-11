@@ -53,14 +53,7 @@ public sealed class LeLibrarySync
         _log = log;
     }
 
-    private static string ProviderName(string provider) => provider switch
-    {
-        "torbox" => "TorBox",
-        "realdebrid" => "Real-Debrid",
-        "alldebrid" => "AllDebrid",
-        "premiumize" => "Premiumize",
-        _ => provider,
-    };
+    private static string ProviderName(string provider) => DebridClientFactory.ProviderName(provider);
 
     /// <summary>Runs one sync.</summary>
     /// <param name="configuration">The plugin settings.</param>
@@ -84,6 +77,11 @@ public sealed class LeLibrarySync
         }
 
         var provider = _clients.Create(configuration);
+        if (provider is null)
+        {
+            return new SyncOutcome(false, DebridClientFactory.UnsupportedMessage(configuration.Provider), null);
+        }
+
         if (!string.IsNullOrEmpty(fetch.Plan.Provider) && !string.Equals(fetch.Plan.Provider, provider.Provider, StringComparison.Ordinal))
         {
             return new SyncOutcome(false, $"the plan is for {fetch.Plan.Provider}, but the plugin is set to {provider.Provider}", null);
