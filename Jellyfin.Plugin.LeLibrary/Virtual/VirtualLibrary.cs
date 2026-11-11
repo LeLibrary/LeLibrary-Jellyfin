@@ -127,6 +127,25 @@ public sealed class VirtualLibrary
             return null;
         }
 
+        // Jellyfin's own TMDb and TVDB providers would fetch for our items too.
+        // The allow-list stands them down; ours runs either way, because a
+        // custom metadata provider is not gated by it.
+        try
+        {
+            var libraryOptions = collection.GetLibraryOptions();
+            if (LeLibraryLibraryOptions.Apply(libraryOptions))
+            {
+                collection.UpdateLibraryOptions(libraryOptions);
+                _log.LogInformation("LeLibrary: {Name} now fetches metadata from LeLibrary only", name);
+            }
+        }
+        catch (Exception err) when (err is InvalidOperationException or UnauthorizedAccessException or IOException)
+        {
+            // The library still works without it; the operator's own providers
+            // would just keep answering alongside ours.
+            _log.LogWarning(err, "LeLibrary: could not write the metadata source list for {Name}", name);
+        }
+
         return _library.GetItemById(physicalId) as Folder;
     }
 
