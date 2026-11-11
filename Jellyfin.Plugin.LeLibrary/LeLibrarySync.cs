@@ -55,6 +55,26 @@ public sealed class LeLibrarySync
 
     private static string ProviderName(string provider) => DebridClientFactory.ProviderName(provider);
 
+    /// <summary>
+    /// Whether a plan may delete anything. Only a plan that was read fresh
+    /// proves that an item is gone: a cached one may be out of date, and a
+    /// failed fetch proves nothing at all.
+    /// </summary>
+    /// <param name="source">Where the plan came from.</param>
+    /// <returns>True when removals are allowed.</returns>
+    public static bool AllowRemovals(PlanSource source) => source == PlanSource.Network;
+
+    /// <summary>
+    /// The provider's file names, keyed the way the plan keys its items. Two
+    /// files under one key are one file seen twice.
+    /// </summary>
+    /// <param name="files">The provider's listing.</param>
+    /// <returns>The file name for each key.</returns>
+    public static Dictionary<string, string> FileNamesByKey(IEnumerable<DebridFile> files)
+        => files
+            .GroupBy(file => file.Key, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().Name, StringComparer.Ordinal);
+
     /// <summary>Runs one sync.</summary>
     /// <param name="configuration">The plugin settings.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -99,7 +119,7 @@ public sealed class LeLibrarySync
         // A key the account no longer has would be an item that cannot play.
         // The file's real name is kept: the container and the play URL have to
         // carry the file's real extension, not a guess.
-        var available = listing.Files.ToDictionary(file => file.Key, file => file.Name, StringComparer.Ordinal);
+        var available = FileNamesByKey(listing.Files);
         var playable = new JellyfinPlan
         {
             SchemaVersion = fetch.Plan.SchemaVersion,
@@ -122,9 +142,15 @@ public sealed class LeLibrarySync
 
         // A plan that came from the cache is not proof that anything is gone:
         // it may not remove a single item.
-        var allowRemovals = fetch.Source == PlanSource.Network;
+        var allowRemovals = AllowRemovals(fetch.Source);
+        if (!allowRemovals)
+        {
+            _log.LogInformation(
+                "LeLibrary: the plan came from the cache, so nothing will be removed. {Error}",
+                fetch.Error ?? "the plan was not modified");
+        }
+
         var result = await _library.ApplyAsync(desired, movies, shows, playBase, allowRemovals, cancellationToken).ConfigureAwait(false);
-        _ = _log;
         return new SyncOutcome(true, null, result);
     }
 }

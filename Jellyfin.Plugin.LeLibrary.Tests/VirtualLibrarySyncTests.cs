@@ -55,6 +55,23 @@ public class VirtualLibrarySyncTests
             0);
     }
 
+    /// <summary>A movie row shaped like the one the previous version wrote.</summary>
+    /// <param name="path">Its play URL.</param>
+    /// <returns>The row.</returns>
+    private static Movie LegacyMovie(string path)
+        => new()
+        {
+            Id = Guid.NewGuid(),
+            Name = "The Matrix",
+            ProductionYear = 1999,
+            Path = path,
+            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [VirtualIdentity.ProviderId] = "torbox:1:2",
+                ["Tmdb"] = "603",
+            },
+        };
+
     /// <summary>A show with one season and three episodes.</summary>
     /// <param name="withFirstEpisode">Whether the first episode is still there.</param>
     /// <returns>The desired library.</returns>
@@ -314,6 +331,131 @@ public class VirtualLibrarySyncTests
 
         Assert.Equal(0, result.Removed);
         Assert.Equal(3, writer.Items.Count(i => i.GetType() == typeof(Episode)));
+    }
+
+    [Fact]
+    public async Task AChangedPlayUrlStillRepairsTheContainer()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
+        var item = Assert.Single(writer.Items, i => i.GetType() == typeof(Movie));
+
+        // What a resync used to do: the container went missing.
+        item.Container = null;
+
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://elsewhere:8096", true, default);
+
+        Assert.Equal("mkv", item.Container);
+    }
+
+    [Fact]
+    public async Task ADoubledLibraryConverges()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+
+        // Two rows for one film, as a changed server URL used to leave behind.
+        var first = LegacyMovie("http://host:8096/LeLibrary/play/torbox:1:2/The%20Matrix.mkv");
+        var second = LegacyMovie("http://elsewhere:8096/LeLibrary/play/torbox:1:2/The%20Matrix.mkv");
+        writer.Items.Add(first);
+        writer.Items.Add(second);
+
+        var result = await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
+
+        var survivor = Assert.Single(writer.Items, i => i.GetType() == typeof(Movie));
+        Assert.Equal(1, result.Removed);
+        // The row that matches the current URL survives, and keeps the id that
+        // carries the watch history.
+        Assert.Equal(first.Id, survivor.Id);
+    }
+
+    [Fact]
+    public async Task AJellyfinProviderIdDoesNotMakeEveryRowStale()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
+        var item = Assert.Single(writer.Items, i => i.GetType() == typeof(Movie));
+
+        // Jellyfin's own metadata refresh found an id the plan did not carry.
+        item.ProviderIds["Imdb"] = "tt0133093";
+
+        var second = await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
+
+        Assert.Equal(1, second.Unchanged);
+        Assert.Equal(0, second.Updated);
+        Assert.Equal("tt0133093", item.ProviderIds["Imdb"]);
+    }
+
+    [Fact]
+    public async Task ALegacyMovieIsMatchedAndRepaired()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+
+        // The row the previous version wrote: the container a resync had wiped.
+        var movie = LegacyMovie("http://host:8096/LeLibrary/play/torbox:1:2/The%20Matrix.mkv");
+        movie.Container = null;
+        writer.Items.Add(movie);
+
+        var result = await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default);
+
+        Assert.Equal(0, result.Added);
+        Assert.Equal(0, result.Removed);
+        var after = Assert.Single(writer.Items, i => i.GetType() == typeof(Movie));
+        Assert.Equal(movie.Id, after.Id);
+        Assert.Equal("mkv", after.Container);
+    }
+
+    [Fact]
+    public async Task ALegacySeriesAndSeasonAreMatched()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+
+        // The rows the previous version wrote: a series carrying the plan key
+        // of one of its episodes, and a season with no provider ids at all.
+        var series = new Series
+        {
+            Id = Guid.NewGuid(),
+            Name = "The Expanse",
+            ProductionYear = 2015,
+            Container = "mkv",
+            Path = "http://host:8096/LeLibrary/play/series:63639/The%20Expanse.mkv",
+            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [VirtualIdentity.ProviderId] = "torbox:7:1",
+                ["Tmdb"] = "63639",
+            },
+        };
+        var season = new Season
+        {
+            Id = Guid.NewGuid(),
+            Name = "Season 1",
+            IndexNumber = 1,
+            Path = "http://host:8096/LeLibrary/play/series:63639:season:1/The%20Expanse.mkv.mkv",
+        };
+        writer.Items.Add(series);
+        writer.Items.Add(season);
+
+        var result = await library.ApplyAsync(
+            PlanWithASeriesOfThreeEpisodes(),
+            MoviesFolder(),
+            ShowsFolder(),
+            "http://host:8096",
+            true,
+            default);
+
+        // The series and the season are matched, not created again, and the
+        // series gets its own provider id.
+        Assert.Single(writer.Items, i => i.GetType() == typeof(Series));
+        Assert.Single(writer.Items, i => i.GetType() == typeof(Season));
+        Assert.Equal(series.Id, series.Id);
+        Assert.Equal("series:63639", series.ProviderIds[VirtualIdentity.SeriesId]);
+        Assert.False(series.ProviderIds.ContainsKey(VirtualIdentity.ProviderId));
+        Assert.Equal(3, result.Added);
+        Assert.Equal(0, result.Removed);
     }
 
     /// <summary>
