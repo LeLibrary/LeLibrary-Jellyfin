@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -52,22 +51,36 @@ public sealed class LeLibraryMetadataProvider :
 
     /// <inheritdoc />
     public Task<ItemUpdateType> FetchAsync(Movie item, MetadataRefreshOptions options, CancellationToken cancellationToken)
-        => Task.FromResult(Apply(item, Find(item, "movie")));
+        => Task.FromResult(Apply(item, MetadataLookup.For(item, _holder.Document)));
 
     /// <inheritdoc />
     public Task<ItemUpdateType> FetchAsync(Series item, MetadataRefreshOptions options, CancellationToken cancellationToken)
-        => Task.FromResult(Apply(item, Find(item, "tv")));
+        => Task.FromResult(Apply(item, MetadataLookup.For(item, _holder.Document)));
 
     /// <inheritdoc />
     public Task<ItemUpdateType> FetchAsync(Episode item, MetadataRefreshOptions options, CancellationToken cancellationToken)
-        => Task.FromResult(ApplyEpisode(item, Find(item, "tv")));
+    {
+        var title = MetadataLookup.For(item, _holder.Document);
+        var metadata = MetadataLookup.EpisodeFor(item, title);
+        if (metadata is null)
+        {
+            return Task.FromResult(ItemUpdateType.None);
+        }
 
-    private MetadataTitle? Find(BaseItem item, string kind)
-        => _holder.Document.Find(
-            kind,
-            Number(item, "Tmdb"),
-            Text(item, "Imdb"),
-            Text(item, "Tvdb"));
+        if (!string.IsNullOrWhiteSpace(metadata.Title))
+        {
+            item.Name = metadata.Title!;
+        }
+
+        item.Overview = metadata.Overview ?? item.Overview;
+        item.PremiereDate = Date(metadata.AirDate) ?? item.PremiereDate;
+        if (metadata.Runtime is { } minutes)
+        {
+            item.RunTimeTicks = TimeSpan.FromMinutes(minutes).Ticks;
+        }
+
+        return Task.FromResult(ItemUpdateType.MetadataEdit);
+    }
 
     private static ItemUpdateType Apply(BaseItem item, MetadataTitle? title)
     {
@@ -105,49 +118,12 @@ public sealed class LeLibraryMetadataProvider :
         return ItemUpdateType.MetadataEdit;
     }
 
-    private static ItemUpdateType ApplyEpisode(Episode episode, MetadataTitle? title)
-    {
-        if (title is null || episode.ParentIndexNumber is not { } season || episode.IndexNumber is not { } number)
-        {
-            return ItemUpdateType.None;
-        }
-
-        var key = season.ToString(CultureInfo.InvariantCulture) + ":" + number.ToString(CultureInfo.InvariantCulture);
-        if (!title.Episodes.TryGetValue(key, out var metadata))
-        {
-            return ItemUpdateType.None;
-        }
-
-        if (!string.IsNullOrWhiteSpace(metadata.Title))
-        {
-            episode.Name = metadata.Title!;
-        }
-
-        episode.Overview = metadata.Overview ?? episode.Overview;
-        episode.PremiereDate = Date(metadata.AirDate) ?? episode.PremiereDate;
-        if (metadata.Runtime is { } minutes)
-        {
-            episode.RunTimeTicks = TimeSpan.FromMinutes(minutes).Ticks;
-        }
-
-        return ItemUpdateType.MetadataEdit;
-    }
-
-    private static int? Number(BaseItem item, string provider)
-        => item.ProviderIds is not null
-            && item.ProviderIds.TryGetValue(provider, out var value)
-            && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)
-                ? number
-                : null;
-
-    private static string? Text(BaseItem item, string provider)
-        => item.ProviderIds is not null && item.ProviderIds.TryGetValue(provider, out var value)
-            && !string.IsNullOrWhiteSpace(value)
-                ? value
-                : null;
-
     private static DateTime? Date(string? value)
-        => DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var date)
+        => DateTime.TryParse(
+            value,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
+            out var date)
             ? date
             : null;
 }
