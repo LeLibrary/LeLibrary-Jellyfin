@@ -57,6 +57,10 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
             }));
         serviceCollection.AddSingleton<Jellyfin.Plugin.LeLibrary.Virtual.ILibraryWriter, Jellyfin.Plugin.LeLibrary.Virtual.JellyfinLibraryWriter>();
         serviceCollection.AddSingleton<Jellyfin.Plugin.LeLibrary.Virtual.VirtualLibrary>();
+        // Jellyfin builds the metadata provider itself (providers are found by
+        // type, not by registration) and resolves its constructor arguments
+        // from this container, so the holder has to be here.
+        serviceCollection.AddSingleton<Jellyfin.Plugin.LeLibrary.Providers.MetadataHolder>();
         serviceCollection.AddSingleton<LeLibrarySync>();
         serviceCollection.AddSingleton(sp => new SyncTask(
             sp.GetRequiredService<LeLibrarySync>(),
