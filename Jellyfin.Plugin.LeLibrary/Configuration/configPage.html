@@ -24,6 +24,10 @@
                         <option value="alldebrid" disabled>AllDebrid (not supported yet)</option>
                         <option value="premiumize" disabled>Premiumize (not supported yet)</option>
                     </select>
+                    <div class="fieldDescription" id="debridProviderNotice" style="display: none;">
+                        The provider you had saved is not supported yet, so TorBox was selected
+                        instead. Save the page to make the change stick.
+                    </div>
                     <div class="fieldDescription">
                         TorBox is the only debrid provider the plugin talks to so far. The others are
                         listed so it is clear they are coming, not forgotten.
@@ -92,7 +96,19 @@
 
             function load() {
                 ApiClient.getPluginConfiguration(pluginId).then(function (config) {
-                    form.querySelector('#debridProvider').value = config.Provider || 'torbox';
+                    var select = form.querySelector('#debridProvider');
+                    // A provider the plugin cannot talk to is not an option
+                    // the user can pick, and leaving it selected would fail
+                    // every sync. Fall back to the one that works.
+                    var saved = config.Provider || 'torbox';
+                    var available = Array.prototype.filter.call(select.options, function (option) {
+                        return !option.disabled;
+                    });
+                    var supported = available.some(function (option) { return option.value === saved; });
+                    select.value = supported ? saved : (available.length ? available[0].value : saved);
+                    if (!supported) {
+                        form.querySelector('#debridProviderNotice').style.display = '';
+                    }
                     form.querySelector('#debridApiKey').value = config.DebridApiKey || '';
                     form.querySelector('#planUrl').value = config.PlanUrl || '';
                     form.querySelector('#serverUrl').value = config.ServerUrl || '';

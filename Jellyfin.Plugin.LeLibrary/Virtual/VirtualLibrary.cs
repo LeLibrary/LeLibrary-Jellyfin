@@ -144,6 +144,8 @@ public sealed class VirtualLibrary
         var created = new List<(BaseItem Parent, BaseItem Item)>();
         var updated = 0;
         var unchanged = 0;
+        // The rows that duplicate another row for the same item.
+        var duplicates = new List<BaseItem>();
 
         // Series, then seasons, then episodes: a child needs its parent to exist.
         var byPath = new Dictionary<string, BaseItem>(StringComparer.OrdinalIgnoreCase);
@@ -169,10 +171,10 @@ public sealed class VirtualLibrary
                     continue;
                 }
 
-                // A one-line .strm: Jellyfin reads it and builds the media
-                // source itself, including the container it takes from the
-                // target's extension. That is the same path a scanned library
-                // uses, so nothing about playback is special-cased by us.
+                // The path is the stream URL: the play endpoint serves the
+                // bytes from the debrid account. It is not a file, and it is
+                // not a .strm: Jellyfin reads the item's container from the
+                // item itself, which is why the container has to be set.
                 var identity = item.Identity;
                 if (identity is null)
                 {
@@ -185,31 +187,38 @@ public sealed class VirtualLibrary
                 var playUrl = $"{playBaseUrl.TrimEnd('/')}/LeLibrary/play/{item.Key}/{Uri.EscapeDataString(item.FileName)}";
                 byPath[item.RelativePath] = item.Item;
 
-                if (existing.TryGetValue(identity, out var current))
+                if (existing.TryGetValue(identity, out var candidates))
                 {
-                    if (!string.Equals(current.Path, playUrl, StringComparison.Ordinal))
+                    // A library that doubled before the fix has more than one
+                    // row for the same item. The one that matches the current
+                    // URL survives; the others are duplicates and go.
+                    var current = ChooseSurvivor(candidates, playUrl);
+                    foreach (var duplicate in candidates.Where(row => row.Id != current.Id))
                     {
+                        duplicates.Add(duplicate);
+                    }
+
+                    var pathChanged = !string.Equals(current.Path, playUrl, StringComparison.Ordinal);
+                    var changed = pathChanged || NeedsUpdate(current, item.Item);
+                    if (pathChanged)
+                    {
+                        // An old .strm file, if an even older version wrote one.
                         if (!string.IsNullOrEmpty(current.Path) && current.Path!.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
                         {
                             try { File.Delete(current.Path); } catch (IOException) { /* best effort */ }
                         }
 
                         current.Path = playUrl;
-                        _writer.UpdateItem(current);
-                        updated++;
-                        item.Item.Id = current.Id;
-                        byPath[item.RelativePath] = current;
-                        continue;
                     }
 
-                    if (NeedsUpdate(current, item.Item))
+                    current.Name = item.Item.Name;
+                    current.ProductionYear = item.Item.ProductionYear;
+                    current.IndexNumber = item.Item.IndexNumber;
+                    current.ParentIndexNumber = item.Item.ParentIndexNumber;
+                    current.Container = item.Item.Container;
+                    MergeProviderIds(current, item.Item);
+                    if (changed)
                     {
-                        current.Name = item.Item.Name;
-                        current.ProductionYear = item.Item.ProductionYear;
-                        current.IndexNumber = item.Item.IndexNumber;
-                        current.ParentIndexNumber = item.Item.ParentIndexNumber;
-                        current.ProviderIds = item.Item.ProviderIds;
-                        current.Container = item.Item.Container;
                         _writer.UpdateItem(current);
                         updated++;
                     }
@@ -268,7 +277,7 @@ public sealed class VirtualLibrary
         // on thousands of HTTP calls.
         QueueMetadataRefresh(created);
 
-        var removed = RemoveStale(desired, existing, allowRemovals);
+        var removed = RemoveStale(desired, existing, duplicates, allowRemovals);
         _log.LogInformation(
             "LeLibrary: {Added} added, {Updated} updated, {Removed} removed, {Unchanged} unchanged, {Skipped} skipped",
             created.Count, updated, removed, unchanged, desired.Skipped);
@@ -294,21 +303,62 @@ public sealed class VirtualLibrary
         }
     }
 
-    private Dictionary<string, BaseItem> LoadExisting()
+    private Dictionary<string, List<BaseItem>> LoadExisting()
     {
         // Keyed by what the item is, not by where it is served from: a row is
-        // found again even when the server URL has changed.
-        var index = new Dictionary<string, BaseItem>(StringComparer.Ordinal);
+        // found again even when the server URL has changed. A library that
+        // doubled before the fix has more than one row for an identity, so
+        // every row is kept until the diff decides which one survives.
+        var index = new Dictionary<string, List<BaseItem>>(StringComparer.Ordinal);
         foreach (var item in _writer.LoadItems())
         {
             var identity = ItemIdentity.Of(item);
-            if (identity is not null)
+            if (identity is null)
             {
-                index[identity] = item;
+                continue;
             }
+
+            if (!index.TryGetValue(identity, out var rows))
+            {
+                rows = new List<BaseItem>();
+                index[identity] = rows;
+            }
+
+            rows.Add(item);
         }
 
         return index;
+    }
+
+    /// <summary>
+    /// The row kept for an identity when a library holds it more than once.
+    /// The one whose path matches the current URL wins, because that is the row
+    /// this sync is writing; otherwise the oldest, which is the one that has
+    /// been watched.
+    /// </summary>
+    /// <param name="candidates">The rows with that identity.</param>
+    /// <param name="playUrl">The URL this sync writes.</param>
+    /// <returns>The row to keep.</returns>
+    private static BaseItem ChooseSurvivor(IReadOnlyList<BaseItem> candidates, string playUrl)
+    {
+        foreach (var row in candidates)
+        {
+            if (string.Equals(row.Path, playUrl, StringComparison.Ordinal))
+            {
+                return row;
+            }
+        }
+
+        var oldest = candidates[0];
+        foreach (var row in candidates)
+        {
+            if (row.DateCreated < oldest.DateCreated)
+            {
+                oldest = row;
+            }
+        }
+
+        return oldest;
     }
 
     private static bool NeedsUpdate(BaseItem current, BaseItem wanted)
@@ -319,13 +369,17 @@ public sealed class VirtualLibrary
             || current.ParentIndexNumber != wanted.ParentIndexNumber
             || ProviderIdsDiffer(current, wanted);
 
+    /// <summary>
+    /// Whether the row's ids are not the ones the plan wants.
+    /// </summary>
+    /// <param name="current">The row.</param>
+    /// <param name="wanted">The item the plan built.</param>
+    /// <returns>True when the row has to be rewritten.</returns>
     private static bool ProviderIdsDiffer(BaseItem current, BaseItem wanted)
     {
-        if (current.ProviderIds.Count != wanted.ProviderIds.Count)
-        {
-            return true;
-        }
-
+        // Only our own ids are compared. Jellyfin's own metadata refresh adds
+        // ids of its own (an IMDb id, a TVDB id), and those must not make
+        // every row look stale on every sync.
         foreach (var pair in wanted.ProviderIds)
         {
             if (!current.ProviderIds.TryGetValue(pair.Key, out var value)
@@ -335,10 +389,49 @@ public sealed class VirtualLibrary
             }
         }
 
+        // One of our own ids that the plan no longer wants: a series that used
+        // to carry the plan key of one of its episodes.
+        foreach (var key in current.ProviderIds.Keys)
+        {
+            if (IsOurId(key) && !wanted.ProviderIds.ContainsKey(key))
+            {
+                return true;
+            }
+        }
+
         return false;
     }
 
-    private int RemoveStale(VirtualLibraryPlan desired, Dictionary<string, BaseItem> existing, bool allowRemovals)
+    /// <summary>
+    /// Writes the plan's ids onto the row, keeping the ids Jellyfin's own
+    /// providers found.
+    /// </summary>
+    /// <param name="current">The row.</param>
+    /// <param name="wanted">The item the plan built.</param>
+    private static void MergeProviderIds(BaseItem current, BaseItem wanted)
+    {
+        var merged = new Dictionary<string, string>(current.ProviderIds, StringComparer.OrdinalIgnoreCase);
+        foreach (var key in merged.Keys.Where(IsOurId).ToList())
+        {
+            merged.Remove(key);
+        }
+
+        foreach (var pair in wanted.ProviderIds)
+        {
+            merged[pair.Key] = pair.Value;
+        }
+
+        current.ProviderIds = merged;
+    }
+
+    private static bool IsOurId(string key)
+        => key == VirtualIdentity.ProviderId || key == VirtualIdentity.SeriesId || key == VirtualIdentity.SeasonId;
+
+    private int RemoveStale(
+        VirtualLibraryPlan desired,
+        Dictionary<string, List<BaseItem>> existing,
+        List<BaseItem> duplicates,
+        bool allowRemovals)
     {
         // A plan that came from a cache is not proof that an item is gone. It
         // removes nothing: only a fresh, complete plan may delete.
@@ -369,10 +462,20 @@ public sealed class VirtualLibrary
         // the series with it.
         var stale = existing
             .Where(pair => !wanted.Contains(pair.Key))
-            .Select(pair => pair.Value)
-            .OrderBy(Rank)
+            .SelectMany(pair => pair.Value)
             .ToList();
 
+        // A library that doubled before the fix holds the same item twice. The
+        // row the diff kept is the one that stays; the other is a duplicate.
+        foreach (var duplicate in duplicates)
+        {
+            if (!stale.Any(row => row.Id == duplicate.Id))
+            {
+                stale.Add(duplicate);
+            }
+        }
+
+        stale = stale.OrderBy(Rank).ToList();
         foreach (var item in stale)
         {
             if (!string.IsNullOrEmpty(item.Path) && item.Path!.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
