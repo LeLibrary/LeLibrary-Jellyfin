@@ -187,4 +187,42 @@ public class VirtualLibraryTests
         Assert.Equal("torbox:7:2", episode.Identity);
         Assert.Equal("torbox:7:2", episode.Item.ProviderIds[VirtualIdentity.ProviderId]);
     }
+
+    [Fact]
+    public void AMultiEpisodeFileBecomesOneItemPerEpisode()
+    {
+        var plan = VirtualItemFactory.Build(new JellyfinPlan
+        {
+            Items = new[]
+            {
+                new PlanItem
+                {
+                    Key = "torbox:96523770:13", Kind = "episode", Library = "shows",
+                    SeriesTitle = "2 Broke Girls", SeriesYear = 2011, TmdbId = 39340,
+                    Season = 6, Episode = 1, EpisodeEnd = 2,
+                },
+            },
+        });
+
+        Assert.Equal(2, plan.Episodes.Count);
+        Assert.Equal(new[] { 1, 2 }, plan.Episodes.Select(e => e.Item.IndexNumber!.Value).OrderBy(n => n).ToArray());
+        Assert.Equal("torbox:96523770:13", plan.Episodes[0].Identity);
+        Assert.Equal("torbox:96523770:13~E2", plan.Episodes[1].Identity);
+        Assert.NotEqual(plan.Episodes[0].FileName, plan.Episodes[1].FileName);
+    }
+
+    [Fact]
+    public void ASingleEpisodeFileIsOneItem()
+    {
+        var plan = VirtualItemFactory.Build(new JellyfinPlan
+        {
+            Items = new[]
+            {
+                new PlanItem { Key = "torbox:1:2", Kind = "episode", Library = "shows", SeriesTitle = "Show", Season = 1, Episode = 3 },
+            },
+        });
+
+        Assert.Single(plan.Episodes);
+        Assert.Equal("torbox:1:2", plan.Episodes[0].Identity);
+    }
 }

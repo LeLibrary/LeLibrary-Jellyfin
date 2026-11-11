@@ -56,7 +56,25 @@ public static class VirtualItemFactory
                     seasons[seasonKey] = seasonItem;
                 }
 
-                episodes.Add(Episode(item, realFileName, seasonItem.RelativePath));
+                // A file can cover several episodes: one item per episode, all
+                // of them pointing at the one real file.
+                var fileName = VirtualIdentity.PlayFileName(item.Path, item.SeriesTitle, item.SeriesYear, realFileName);
+                var last = item.EpisodeEnd is > 0 && item.EpisodeEnd.Value > item.Episode.Value
+                    ? item.EpisodeEnd.Value
+                    : item.Episode.Value;
+                for (var number = item.Episode.Value; number <= last; number++)
+                {
+                    // The first episode keeps the plan key as its identity, so
+                    // an existing episode is matched rather than recreated.
+                    var identity = number == item.Episode.Value
+                        ? item.Key
+                        : item.Key + "~E" + number.ToString(CultureInfo.InvariantCulture);
+                    var episodeFileName = number == item.Episode.Value
+                        ? fileName
+                        : VirtualIdentity.EpisodeFileName(fileName, number);
+                    episodes.Add(Episode(item, number, identity, episodeFileName, seasonItem.RelativePath));
+                }
+
                 continue;
             }
 
@@ -122,22 +140,24 @@ public static class VirtualItemFactory
         return new VirtualItem(relative, seriesRelative, key, fileName, season, key);
     }
 
-    private static VirtualItem Episode(PlanItem item, string? realFileName, string seasonRelative)
+    private static VirtualItem Episode(PlanItem item, int number, string identity, string fileName, string seasonRelative)
     {
-        var relative = VirtualIdentity.MediaRelativePath("episode", item.SeriesTitle!, item.SeriesYear, item.Season, item.Episode, item.Key);
-        var fileName = VirtualIdentity.PlayFileName(item.Path, item.SeriesTitle, item.SeriesYear, realFileName);
+        var relative = VirtualIdentity.MediaRelativePath("episode", item.SeriesTitle!, item.SeriesYear, item.Season, number, item.Key);
         var episode = new Episode
         {
-            Name = string.IsNullOrWhiteSpace(item.EpisodeTitle)
-                ? "Episode " + item.Episode!.Value.ToString(CultureInfo.InvariantCulture)
-                : item.EpisodeTitle,
-            IndexNumber = item.Episode,
+            // The plan's title belongs to the first episode of the file.
+            Name = number == item.Episode && !string.IsNullOrWhiteSpace(item.EpisodeTitle)
+                ? item.EpisodeTitle!
+                : "Episode " + number.ToString(CultureInfo.InvariantCulture),
+            IndexNumber = number,
             ParentIndexNumber = item.Season,
             IsVirtualItem = false,
             Container = VirtualIdentity.ContainerOf(fileName),
-            ProviderIds = ProviderIds(item, VirtualIdentity.ProviderId, item.Key),
+            // The provider id holds the identity, so the row can be found
+            // again by what it is.
+            ProviderIds = ProviderIds(item, VirtualIdentity.ProviderId, identity),
         };
-        return new VirtualItem(relative, seasonRelative, item.Key, fileName, episode, item.Key);
+        return new VirtualItem(relative, seasonRelative, item.Key, fileName, episode, identity);
     }
 
     /// <summary>Attaches the poster and backdrop LeLibrary chose to an item.</summary>
