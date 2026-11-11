@@ -102,6 +102,11 @@ dotnet test
 
 ## Licence
 
-Not chosen yet. Jellyfin itself is GPL-3.0, and a plugin that links against
-`Jellyfin.Controller` is normally distributed under GPL-3.0 as well; the licence
-will be added before the first release.
+LeLibrary for Jellyfin is licensed under the
+[GNU General Public License v3.0](LICENSE) (GPL-3.0-only). That is the licence
+Jellyfin itself uses, and the one a plugin that links against
+`Jellyfin.Controller` is distributed under.
+
+In short: you can install it, read it and change it. If you distribute a
+modified build, you must publish your changes under the same licence, and there
+is no warranty.
