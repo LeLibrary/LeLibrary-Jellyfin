@@ -239,6 +239,57 @@ public class VirtualLibrarySyncTests
         Assert.EndsWith(".mp4", item.Path, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task BothEpisodesOfOneFileAreCreated()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+        var plan = VirtualItemFactory.Build(new JellyfinPlan
+        {
+            Items = new[]
+            {
+                new PlanItem
+                {
+                    Key = "torbox:96523770:13", Kind = "episode", Library = "shows",
+                    SeriesTitle = "2 Broke Girls", SeriesYear = 2011, TmdbId = 39340,
+                    Season = 6, Episode = 1, EpisodeEnd = 2,
+                },
+            },
+        });
+
+        await library.ApplyAsync(plan, MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+
+        Assert.Equal(2, writer.Items.Count(i => i.GetType() == typeof(Episode)));
+        Assert.Single(writer.Items, i => i.GetType() == typeof(Series));
+    }
+
+    [Fact]
+    public async Task BothEpisodesOfOneFileAreMatchedAgainOnTheNextSync()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+
+        VirtualLibraryPlan FreshPlan() => VirtualItemFactory.Build(new JellyfinPlan
+        {
+            Items = new[]
+            {
+                new PlanItem
+                {
+                    Key = "torbox:96523770:13", Kind = "episode", Library = "shows",
+                    SeriesTitle = "2 Broke Girls", SeriesYear = 2011, TmdbId = 39340,
+                    Season = 6, Episode = 1, EpisodeEnd = 2,
+                },
+            },
+        });
+
+        await library.ApplyAsync(FreshPlan(), MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+        var second = await library.ApplyAsync(FreshPlan(), MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+
+        Assert.Equal(2, writer.Items.Count(i => i.GetType() == typeof(Episode)));
+        Assert.Equal(0, second.Added);
+        Assert.Equal(0, second.Removed);
+    }
+
     /// <summary>
     /// A provider manager that only answers the one call the sync makes.
     /// </summary>

@@ -84,6 +84,22 @@ public static class VirtualIdentity
     }
 
     /// <summary>
+    /// The file name of one episode of a file that covers several. The name
+    /// differs from the first episode's so the two rows do not share a path,
+    /// and the extension is kept so the container does not change.
+    /// </summary>
+    /// <param name="fileName">The file name of the first episode.</param>
+    /// <param name="episode">The episode number.</param>
+    /// <returns>A file name for this episode.</returns>
+    public static string EpisodeFileName(string fileName, int episode)
+    {
+        var name = System.IO.Path.GetFileNameWithoutExtension(fileName ?? string.Empty);
+        var marked = name + " E" + episode.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var extension = ExtensionOf(fileName);
+        return extension is null ? marked : marked + "." + extension;
+    }
+
+    /// <summary>
     /// The container Jellyfin derives from a file name. The container has to be
     /// the real one: a request that does not name a container cannot be
     /// answered at all.
