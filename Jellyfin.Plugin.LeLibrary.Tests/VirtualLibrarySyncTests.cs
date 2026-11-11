@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.LeLibrary.Model;
 using Jellyfin.Plugin.LeLibrary.Virtual;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
@@ -182,6 +183,60 @@ public class VirtualLibrarySyncTests
         Assert.Single(writer.Items, i => i.GetType() == typeof(Series));
         Assert.Equal(2, writer.Items.Count(i => i.GetType() == typeof(Episode)));
         Assert.Equal(1, result.Removed);
+    }
+
+    [Fact]
+    public async Task AResyncKeepsTheContainer()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+
+        // A fresh plan each time, the way a sync builds one: the first apply
+        // fills the container in on the item it created, and the second sync
+        // must not wipe it.
+        VirtualLibraryPlan FreshPlan() => VirtualItemFactory.Build(new JellyfinPlan
+        {
+            Items = new[]
+            {
+                new PlanItem
+                {
+                    Key = "torbox:1:2", Kind = "movie", Library = "movies",
+                    Title = "The Matrix", Year = 1999, Path = "The Matrix (1999)/The Matrix (1999).strm",
+                },
+            },
+        });
+
+        await library.ApplyAsync(FreshPlan(), MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+        await library.ApplyAsync(FreshPlan(), MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+
+        var item = Assert.Single(writer.Items, i => i.GetType() == typeof(Movie));
+        Assert.Equal("mkv", item.Container);
+    }
+
+    [Fact]
+    public async Task ARealMp4IsDeclaredAsMp4()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+        var plan = VirtualItemFactory.Build(
+            new JellyfinPlan
+            {
+                Items = new[]
+                {
+                    new PlanItem
+                    {
+                        Key = "torbox:1:2", Kind = "movie", Library = "movies",
+                        Title = "Movie", Year = 2019, Path = "Movie/Movie.strm",
+                    },
+                },
+            },
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["torbox:1:2"] = "Movie.2019.1080p.mp4" });
+
+        await library.ApplyAsync(plan, MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+
+        var item = Assert.Single(writer.Items, i => i.GetType() == typeof(Movie));
+        Assert.Equal("mp4", item.Container);
+        Assert.EndsWith(".mp4", item.Path, StringComparison.Ordinal);
     }
 
     /// <summary>

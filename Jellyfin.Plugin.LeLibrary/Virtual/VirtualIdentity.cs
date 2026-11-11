@@ -67,8 +67,9 @@ public static class VirtualIdentity
     /// <param name="planPath">The path LeLibrary sent, when present.</param>
     /// <param name="title">Fallback title.</param>
     /// <param name="year">Fallback year.</param>
+    /// <param name="realFileName">The provider's real file name, when it is known.</param>
     /// <returns>A file name.</returns>
-    public static string PlayFileName(string? planPath, string? title, int? year)
+    public static string PlayFileName(string? planPath, string? title, int? year, string? realFileName = null)
     {
         var name = string.IsNullOrWhiteSpace(planPath) ? null : System.IO.Path.GetFileNameWithoutExtension(planPath);
         // A name with no letters or digits (".", "..") is not a file name.
@@ -78,7 +79,45 @@ public static class VirtualIdentity
         }
 
         foreach (var c in new[] { '/', '\\', ':', '*', '?', '"', '<', '>', '|' }) name = name!.Replace(c, '-');
-        return name + ".mkv";
+        var extension = ExtensionOf(realFileName);
+        return name + (extension is null ? ".mkv" : "." + extension);
+    }
+
+    /// <summary>
+    /// The container Jellyfin derives from a file name. The container has to be
+    /// the real one: a request that does not name a container cannot be
+    /// answered at all.
+    /// </summary>
+    /// <param name="fileName">The file name.</param>
+    /// <returns>The container.</returns>
+    public static string ContainerOf(string? fileName)
+    {
+        var extension = ExtensionOf(fileName);
+        return extension switch
+        {
+            "mkv" => "mkv",
+            "mp4" => "mp4",
+            "m4v" => "mp4",
+            "avi" => "avi",
+            "ts" => "ts",
+            "webm" => "webm",
+            "mov" => "mov",
+            _ => "mkv",
+        };
+    }
+
+    /// <summary>The lower-cased extension of a file name, without the dot.</summary>
+    /// <param name="fileName">The file name.</param>
+    /// <returns>The extension, or null when it has none.</returns>
+    private static string? ExtensionOf(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return null;
+        }
+
+        var extension = System.IO.Path.GetExtension(fileName).TrimStart('.').ToLowerInvariant();
+        return extension.Length == 0 ? null : extension;
     }
 
     private static string Folder(string? title, int? year)
