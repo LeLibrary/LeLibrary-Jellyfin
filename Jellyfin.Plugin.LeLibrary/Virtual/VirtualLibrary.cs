@@ -172,11 +172,19 @@ public sealed class VirtualLibrary
                 // source itself, including the container it takes from the
                 // target's extension. That is the same path a scanned library
                 // uses, so nothing about playback is special-cased by us.
+                var identity = item.Identity;
+                if (identity is null)
+                {
+                    // An item with no identity cannot be matched and must not
+                    // be guessed at: a wrong guess duplicates it.
+                    _log.LogWarning("LeLibrary: no identity for {Path}", item.RelativePath);
+                    continue;
+                }
+
                 var playUrl = $"{playBaseUrl.TrimEnd('/')}/LeLibrary/play/{item.Key}/{Uri.EscapeDataString(item.FileName)}";
-                var id = _writer.NewItemId(playUrl, item.Item.GetType());
                 byPath[item.RelativePath] = item.Item;
 
-                if (existing.TryGetValue(id, out var current))
+                if (existing.TryGetValue(identity, out var current))
                 {
                     if (!string.Equals(current.Path, playUrl, StringComparison.Ordinal))
                     {
@@ -214,7 +222,10 @@ public sealed class VirtualLibrary
                     continue;
                 }
 
-                item.Item.Id = id;
+                // The id comes from the identity, never from the URL: a change
+                // of server URL must not rewrite every id and orphan the
+                // watch history.
+                item.Item.Id = _writer.NewItemId(identity, item.Item.GetType());
                 item.Item.Path = playUrl;
                 // The container Jellyfin derives when it builds the media
                 // source. Without it a request that does not name a container
@@ -223,7 +234,7 @@ public sealed class VirtualLibrary
                 item.Item.ParentId = parent.Id;
                 item.Item.DateCreated = DateTime.UtcNow;
                 item.Item.DateModified = DateTime.UtcNow;
-                item.Item.PresentationUniqueKey = id.ToString("N", System.Globalization.CultureInfo.InvariantCulture);
+                item.Item.PresentationUniqueKey = item.Item.Id.ToString("N", System.Globalization.CultureInfo.InvariantCulture);
                 created.Add((parent, item.Item));
                 byPath[item.RelativePath] = item.Item;
             }
@@ -282,12 +293,21 @@ public sealed class VirtualLibrary
         }
     }
 
-    private Dictionary<Guid, BaseItem> LoadExisting()
+    private Dictionary<string, BaseItem> LoadExisting()
     {
-        return _writer.LoadItems()
-            .Where(item => item.ProviderIds.ContainsKey(VirtualIdentity.ProviderId))
-            .GroupBy(item => item.Id)
-            .ToDictionary(group => group.Key, group => group.First());
+        // Keyed by what the item is, not by where it is served from: a row is
+        // found again even when the server URL has changed.
+        var index = new Dictionary<string, BaseItem>(StringComparer.Ordinal);
+        foreach (var item in _writer.LoadItems())
+        {
+            var identity = ItemIdentity.Of(item);
+            if (identity is not null)
+            {
+                index[identity] = item;
+            }
+        }
+
+        return index;
     }
 
     private static string ContainerOf(string? fileName)
@@ -311,14 +331,37 @@ public sealed class VirtualLibrary
             || !string.Equals(current.Container, wanted.Container, StringComparison.Ordinal)
             || current.ProductionYear != wanted.ProductionYear
             || current.IndexNumber != wanted.IndexNumber
-            || current.ParentIndexNumber != wanted.ParentIndexNumber;
+            || current.ParentIndexNumber != wanted.ParentIndexNumber
+            || ProviderIdsDiffer(current, wanted);
 
-    private int RemoveStale(VirtualLibraryPlan desired, Dictionary<Guid, BaseItem> existing)
+    private static bool ProviderIdsDiffer(BaseItem current, BaseItem wanted)
+    {
+        if (current.ProviderIds.Count != wanted.ProviderIds.Count)
+        {
+            return true;
+        }
+
+        foreach (var pair in wanted.ProviderIds)
+        {
+            if (!current.ProviderIds.TryGetValue(pair.Key, out var value)
+                || !string.Equals(value, pair.Value, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private int RemoveStale(VirtualLibraryPlan desired, Dictionary<string, BaseItem> existing)
     {
         var wanted = new HashSet<string>(StringComparer.Ordinal);
         foreach (var group in new[] { desired.Movies, desired.Series, desired.Seasons, desired.Episodes })
         {
-            foreach (var item in group) wanted.Add(item.Key);
+            foreach (var item in group)
+            {
+                if (item.Identity is not null) wanted.Add(item.Identity);
+            }
         }
 
         static int Rank(BaseItem item) => item switch
@@ -329,8 +372,12 @@ public sealed class VirtualLibrary
             _ => 3,
         };
 
-        var stale = existing.Values
-            .Where(item => !wanted.Contains(item.ProviderIds[VirtualIdentity.ProviderId]))
+        // Compared by identity, not by provider id: a series used to carry the
+        // plan key of one of its episodes, so removing that episode removed
+        // the series with it.
+        var stale = existing
+            .Where(pair => !wanted.Contains(pair.Key))
+            .Select(pair => pair.Value)
             .OrderBy(Rank)
             .ToList();
 

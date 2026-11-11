@@ -39,6 +39,7 @@ public class VirtualLibrarySyncTests
         {
             Name = "The Matrix",
             ProductionYear = 1999,
+            Container = "mkv",
             ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 [VirtualIdentity.ProviderId] = "torbox:1:2",
@@ -53,6 +54,72 @@ public class VirtualLibrarySyncTests
             0);
     }
 
+    /// <summary>A show with one season and three episodes.</summary>
+    /// <param name="withFirstEpisode">Whether the first episode is still there.</param>
+    /// <returns>The desired library.</returns>
+    private static VirtualLibraryPlan PlanWithASeriesOfThreeEpisodes(bool withFirstEpisode = true)
+    {
+        var series = new Series
+        {
+            Name = "The Expanse",
+            ProductionYear = 2015,
+            Container = "mkv",
+            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [VirtualIdentity.SeriesId] = "series:63639",
+            },
+        };
+
+        const string SeriesPath = "Shows/The Expanse (2015)";
+        const string SeasonPath = SeriesPath + "/Season 01";
+
+        var season = new Season
+        {
+            Name = "Season 1",
+            IndexNumber = 1,
+            ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [VirtualIdentity.SeasonId] = "series:63639:season:1",
+            },
+        };
+
+        var episodes = new List<VirtualItem>();
+        foreach (var number in Enumerable.Range(1, 3))
+        {
+            if (number == 1 && !withFirstEpisode)
+            {
+                continue;
+            }
+
+            var episode = new Episode
+            {
+                Name = "Episode " + number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                IndexNumber = number,
+                ParentIndexNumber = 1,
+                Container = "mkv",
+                ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [VirtualIdentity.ProviderId] = "torbox:7:" + number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                },
+            };
+
+            episodes.Add(new VirtualItem(
+                SeasonPath + "/The Expanse S01E0" + number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                SeasonPath,
+                "torbox:7:" + number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "The Expanse S01E0" + number.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".mkv",
+                episode,
+                "torbox:7:" + number.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
+
+        return new VirtualLibraryPlan(
+            Array.Empty<VirtualItem>(),
+            new[] { new VirtualItem(SeriesPath, null, "series:63639", "The Expanse.mkv", series, "series:63639") },
+            new[] { new VirtualItem(SeasonPath, SeriesPath, "series:63639:season:1", "The Expanse.mkv", season, "series:63639:season:1") },
+            episodes,
+            0);
+    }
+
     [Fact]
     public async Task AFreshLibraryCreatesEveryItem()
     {
@@ -60,6 +127,61 @@ public class VirtualLibrarySyncTests
         var library = NewLibrary(writer);
         var result = await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", default);
         Assert.Equal(1, result.Added);
+    }
+
+    [Fact]
+    public async Task AResyncChangesNothing()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+        var plan = PlanWithOneMovie();
+        await library.ApplyAsync(plan, MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+        var second = await library.ApplyAsync(plan, MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+        Assert.Equal(0, second.Added);
+        Assert.Equal(0, second.Updated);
+        Assert.Equal(0, second.Removed);
+        Assert.Equal(1, second.Unchanged);
+    }
+
+    [Fact]
+    public async Task TheServerUrlDoesNotChangeTheItemId()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+        var before = Assert.Single(writer.Items);
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://elsewhere:8096", default);
+        var after = Assert.Single(writer.Items, i => i.GetType() == typeof(Movie));
+        Assert.Equal(before.Id, after.Id);
+    }
+
+    [Fact]
+    public async Task TheServerUrlDoesNotDuplicateTheLibrary()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://elsewhere:8096", default);
+        Assert.Single(writer.Items, i => i.GetType() == typeof(Movie));
+    }
+
+    [Fact]
+    public async Task RemovingOneEpisodeDoesNotRemoveTheSeries()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+        await library.ApplyAsync(PlanWithASeriesOfThreeEpisodes(), MoviesFolder(), ShowsFolder(), "http://host:8096", default);
+
+        var result = await library.ApplyAsync(
+            PlanWithASeriesOfThreeEpisodes(withFirstEpisode: false),
+            MoviesFolder(),
+            ShowsFolder(),
+            "http://host:8096",
+            default);
+
+        Assert.Single(writer.Items, i => i.GetType() == typeof(Series));
+        Assert.Equal(2, writer.Items.Count(i => i.GetType() == typeof(Episode)));
+        Assert.Equal(1, result.Removed);
     }
 
     /// <summary>
