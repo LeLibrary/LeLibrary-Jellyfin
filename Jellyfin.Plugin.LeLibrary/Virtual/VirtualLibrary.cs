@@ -45,16 +45,21 @@ public sealed class VirtualLibrary
 
     private readonly ILibraryManager _library;
     private readonly IProviderManager _providers;
+    private readonly ILibraryWriter _writer;
     private readonly IFileSystem _fileSystem;
     private readonly ILogger<VirtualLibrary> _log;
 
     /// <summary>Initializes a new instance of the <see cref="VirtualLibrary"/> class.</summary>
-    /// <param name="library">The library manager.</param>
+    /// <param name="library">The library manager, used to set the libraries up.</param>
+    /// <param name="providers">Jellyfin's provider manager, used to queue the metadata refresh.</param>
+    /// <param name="writer">Where the items are written.</param>
+    /// <param name="fileSystem">Jellyfin's file system.</param>
     /// <param name="log">The logger.</param>
-    public VirtualLibrary(ILibraryManager library, IProviderManager providers, IFileSystem fileSystem, ILogger<VirtualLibrary> log)
+    public VirtualLibrary(ILibraryManager library, IProviderManager providers, ILibraryWriter writer, IFileSystem fileSystem, ILogger<VirtualLibrary> log)
     {
         _library = library;
         _providers = providers;
+        _writer = writer;
         _fileSystem = fileSystem;
         _log = log;
     }
@@ -127,9 +132,10 @@ public sealed class VirtualLibrary
     /// <param name="desired">What the plan wants.</param>
     /// <param name="moviesRoot">The movies physical folder.</param>
     /// <param name="showsRoot">The shows physical folder.</param>
+    /// <param name="playBaseUrl">The base of the play URLs.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>What changed.</returns>
-    public async Task<VirtualSyncResult> ApplyAsync(VirtualLibraryPlan desired, Folder moviesRoot, Folder showsRoot, string playBaseUrl, CancellationToken cancellationToken)
+    public Task<VirtualSyncResult> ApplyAsync(VirtualLibraryPlan desired, Folder moviesRoot, Folder showsRoot, string playBaseUrl, CancellationToken cancellationToken)
     {
         var existing = LoadExisting();
         // Grouped by parent: CreateItems takes one parent for the whole batch,
@@ -167,7 +173,7 @@ public sealed class VirtualLibrary
                 // target's extension. That is the same path a scanned library
                 // uses, so nothing about playback is special-cased by us.
                 var playUrl = $"{playBaseUrl.TrimEnd('/')}/LeLibrary/play/{item.Key}/{Uri.EscapeDataString(item.FileName)}";
-                var id = _library.GetNewItemId(playUrl, item.Item.GetType());
+                var id = _writer.NewItemId(playUrl, item.Item.GetType());
                 byPath[item.RelativePath] = item.Item;
 
                 if (existing.TryGetValue(id, out var current))
@@ -180,7 +186,7 @@ public sealed class VirtualLibrary
                         }
 
                         current.Path = playUrl;
-                        await current.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, cancellationToken).ConfigureAwait(false);
+                        _writer.UpdateItem(current);
                         updated++;
                         item.Item.Id = current.Id;
                         byPath[item.RelativePath] = current;
@@ -195,7 +201,7 @@ public sealed class VirtualLibrary
                         current.ParentIndexNumber = item.Item.ParentIndexNumber;
                         current.ProviderIds = item.Item.ProviderIds;
                         current.Container = item.Item.Container;
-                        await current.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, cancellationToken).ConfigureAwait(false);
+                        _writer.UpdateItem(current);
                         updated++;
                     }
                     else
@@ -233,14 +239,14 @@ public sealed class VirtualLibrary
                 batch.Add(entry.Item);
                 if (batch.Count == BatchSize)
                 {
-                    _library.CreateItems(batch.ToList(), parent, cancellationToken);
+                    _writer.CreateItems(batch.ToList(), parent);
                     batch.Clear();
                 }
             }
 
             if (batch.Count > 0)
             {
-                _library.CreateItems(batch, parent, cancellationToken);
+                _writer.CreateItems(batch, parent);
             }
         }
 
@@ -254,7 +260,7 @@ public sealed class VirtualLibrary
         _log.LogInformation(
             "LeLibrary: {Added} added, {Updated} updated, {Removed} removed, {Unchanged} unchanged, {Skipped} skipped",
             created.Count, updated, removed, unchanged, desired.Skipped);
-        return new VirtualSyncResult(created.Count, updated, removed, unchanged, desired.Skipped);
+        return Task.FromResult(new VirtualSyncResult(created.Count, updated, removed, unchanged, desired.Skipped));
     }
 
     private void QueueMetadataRefresh(IEnumerable<(BaseItem Parent, BaseItem Item)> created)
@@ -278,19 +284,7 @@ public sealed class VirtualLibrary
 
     private Dictionary<Guid, BaseItem> LoadExisting()
     {
-        var query = new InternalItemsQuery
-        {
-            Recursive = true,
-            IncludeItemTypes = new[]
-            {
-                Jellyfin.Data.Enums.BaseItemKind.Movie,
-                Jellyfin.Data.Enums.BaseItemKind.Episode,
-                Jellyfin.Data.Enums.BaseItemKind.Series,
-                Jellyfin.Data.Enums.BaseItemKind.Season,
-            },
-        };
-
-        return _library.GetItemList(query)
+        return _writer.LoadItems()
             .Where(item => item.ProviderIds.ContainsKey(VirtualIdentity.ProviderId))
             .GroupBy(item => item.Id)
             .ToDictionary(group => group.Key, group => group.First());
@@ -347,7 +341,7 @@ public sealed class VirtualLibrary
                 try { File.Delete(item.Path); } catch (IOException) { /* next sync retries */ }
             }
 
-            _library.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false, DeleteFromExternalProvider = false }, true);
+            _writer.DeleteItem(item);
         }
 
         return stale.Count;

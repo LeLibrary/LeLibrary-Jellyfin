@@ -46,6 +46,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
             {
                 Timeout = System.Threading.Timeout.InfiniteTimeSpan,
             }));
+        serviceCollection.AddSingleton<Jellyfin.Plugin.LeLibrary.Virtual.ILibraryWriter, Jellyfin.Plugin.LeLibrary.Virtual.JellyfinLibraryWriter>();
         serviceCollection.AddSingleton<Jellyfin.Plugin.LeLibrary.Virtual.VirtualLibrary>();
         serviceCollection.AddSingleton<LeLibrarySync>();
         serviceCollection.AddSingleton(sp => new SyncTask(
