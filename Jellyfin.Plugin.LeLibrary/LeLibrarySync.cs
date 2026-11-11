@@ -118,7 +118,11 @@ public sealed class LeLibrarySync
         var playBase = string.IsNullOrWhiteSpace(configuration.ServerUrl)
             ? _appHost.GetApiUrlForLocalAccess()
             : configuration.ServerUrl.Trim();
-        var result = await _library.ApplyAsync(desired, movies, shows, playBase, cancellationToken).ConfigureAwait(false);
+
+        // A plan that came from the cache is not proof that anything is gone:
+        // it may not remove a single item.
+        var allowRemovals = fetch.Source == PlanSource.Network;
+        var result = await _library.ApplyAsync(desired, movies, shows, playBase, allowRemovals, cancellationToken).ConfigureAwait(false);
         _ = _log;
         return new SyncOutcome(true, null, result);
     }

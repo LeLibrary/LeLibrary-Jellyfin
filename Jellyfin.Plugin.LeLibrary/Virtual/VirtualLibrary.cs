@@ -133,9 +133,10 @@ public sealed class VirtualLibrary
     /// <param name="moviesRoot">The movies physical folder.</param>
     /// <param name="showsRoot">The shows physical folder.</param>
     /// <param name="playBaseUrl">The base of the play URLs.</param>
+    /// <param name="allowRemovals">Whether items that are no longer wanted may be deleted. A plan that came from a cache may not remove anything.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>What changed.</returns>
-    public Task<VirtualSyncResult> ApplyAsync(VirtualLibraryPlan desired, Folder moviesRoot, Folder showsRoot, string playBaseUrl, CancellationToken cancellationToken)
+    public Task<VirtualSyncResult> ApplyAsync(VirtualLibraryPlan desired, Folder moviesRoot, Folder showsRoot, string playBaseUrl, bool allowRemovals, CancellationToken cancellationToken)
     {
         var existing = LoadExisting();
         // Grouped by parent: CreateItems takes one parent for the whole batch,
@@ -267,7 +268,7 @@ public sealed class VirtualLibrary
         // on thousands of HTTP calls.
         QueueMetadataRefresh(created);
 
-        var removed = RemoveStale(desired, existing);
+        var removed = RemoveStale(desired, existing, allowRemovals);
         _log.LogInformation(
             "LeLibrary: {Added} added, {Updated} updated, {Removed} removed, {Unchanged} unchanged, {Skipped} skipped",
             created.Count, updated, removed, unchanged, desired.Skipped);
@@ -337,8 +338,15 @@ public sealed class VirtualLibrary
         return false;
     }
 
-    private int RemoveStale(VirtualLibraryPlan desired, Dictionary<string, BaseItem> existing)
+    private int RemoveStale(VirtualLibraryPlan desired, Dictionary<string, BaseItem> existing, bool allowRemovals)
     {
+        // A plan that came from a cache is not proof that an item is gone. It
+        // removes nothing: only a fresh, complete plan may delete.
+        if (!allowRemovals)
+        {
+            return 0;
+        }
+
         var wanted = new HashSet<string>(StringComparer.Ordinal);
         foreach (var group in new[] { desired.Movies, desired.Series, desired.Seasons, desired.Episodes })
         {
