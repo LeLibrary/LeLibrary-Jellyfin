@@ -230,7 +230,7 @@ public sealed class VirtualLibrary
                 // The container Jellyfin derives when it builds the media
                 // source. Without it a request that does not name a container
                 // cannot be answered at all.
-                item.Item.Container = ContainerOf(item.FileName);
+                item.Item.Container = VirtualIdentity.ContainerOf(item.FileName);
                 item.Item.ParentId = parent.Id;
                 item.Item.DateCreated = DateTime.UtcNow;
                 item.Item.DateModified = DateTime.UtcNow;
@@ -308,22 +308,6 @@ public sealed class VirtualLibrary
         }
 
         return index;
-    }
-
-    private static string ContainerOf(string? fileName)
-    {
-        var extension = Path.GetExtension(fileName ?? string.Empty).TrimStart('.').ToLowerInvariant();
-        return extension switch
-        {
-            "mkv" => "mkv",
-            "mp4" => "mp4",
-            "m4v" => "mp4",
-            "avi" => "avi",
-            "ts" => "ts",
-            "webm" => "webm",
-            "mov" => "mov",
-            _ => "mkv",
-        };
     }
 
     private static bool NeedsUpdate(BaseItem current, BaseItem wanted)

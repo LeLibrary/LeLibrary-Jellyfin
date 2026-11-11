@@ -96,16 +96,18 @@ public sealed class LeLibrarySync
         }
 
         // A key the account no longer has would be an item that cannot play.
-        var available = listing.Files.Select(file => file.Key).ToHashSet(StringComparer.Ordinal);
+        // The file's real name is kept: the container and the play URL have to
+        // carry the file's real extension, not a guess.
+        var available = listing.Files.ToDictionary(file => file.Key, file => file.Name, StringComparer.Ordinal);
         var playable = new JellyfinPlan
         {
             SchemaVersion = fetch.Plan.SchemaVersion,
             Provider = fetch.Plan.Provider,
             Libraries = fetch.Plan.Libraries,
-            Items = fetch.Plan.Items.Where(item => available.Contains(item.Key)).ToList(),
+            Items = fetch.Plan.Items.Where(item => available.ContainsKey(item.Key)).ToList(),
         };
 
-        var desired = VirtualItemFactory.Build(playable);
+        var desired = VirtualItemFactory.Build(playable, available);
         var dataPath = Path.Combine(_paths.DataPath, "lelibrary");
         var (movies, shows) = await _library.EnsureLibrariesAsync(dataPath, ProviderName(provider.Provider), cancellationToken).ConfigureAwait(false);
         if (movies is null || shows is null)
