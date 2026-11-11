@@ -37,19 +37,23 @@ public sealed class LeLibrarySync
     private readonly VirtualLibrary _library;
     private readonly IApplicationPaths _paths;
     private readonly IServerApplicationHost _appHost;
+    private readonly MetadataHolder _metadata;
     private readonly ILogger<LeLibrarySync> _log;
 
     /// <summary>Initializes a new instance of the <see cref="LeLibrarySync"/> class.</summary>
     /// <param name="clients">The provider factory.</param>
     /// <param name="library">The virtual library writer.</param>
     /// <param name="paths">Jellyfin's paths (for the cached plan).</param>
+    /// <param name="appHost">Jellyfin's application host.</param>
+    /// <param name="metadata">Where the metadata document is kept for the providers.</param>
     /// <param name="log">The logger.</param>
-    public LeLibrarySync(DebridClientFactory clients, VirtualLibrary library, IApplicationPaths paths, IServerApplicationHost appHost, ILogger<LeLibrarySync> log)
+    public LeLibrarySync(DebridClientFactory clients, VirtualLibrary library, IApplicationPaths paths, IServerApplicationHost appHost, MetadataHolder metadata, ILogger<LeLibrarySync> log)
     {
         _clients = clients;
         _library = library;
         _paths = paths;
         _appHost = appHost;
+        _metadata = metadata;
         _log = log;
     }
 
@@ -63,6 +67,28 @@ public sealed class LeLibrarySync
     /// <param name="source">Where the plan came from.</param>
     /// <returns>True when removals are allowed.</returns>
     public static bool AllowRemovals(PlanSource source) => source == PlanSource.Network;
+
+    /// <summary>
+    /// Puts a fetched metadata document where Jellyfin's providers read it, and
+    /// returns the document this sync should attach art from.
+    ///
+    /// A failed fetch changes nothing: the providers keep the last document
+    /// they had, and the library is written without metadata rather than not
+    /// written at all.
+    /// </summary>
+    /// <param name="holder">The document holder.</param>
+    /// <param name="fetch">The fetch result.</param>
+    /// <returns>The document to apply, or null.</returns>
+    public static MetadataDocument? AcceptMetadata(MetadataHolder holder, MetadataFetch fetch)
+    {
+        if (!fetch.Ok)
+        {
+            return null;
+        }
+
+        holder.Document = fetch.Document;
+        return fetch.Document;
+    }
 
     /// <summary>
     /// The provider's file names, keyed the way the plan keys its items. Two
@@ -103,6 +129,19 @@ public sealed class LeLibrarySync
         if (!fetch.Ok)
         {
             return new SyncOutcome(false, fetch.Error ?? "the plan could not be read", null);
+        }
+
+        // The metadata is an enrichment, never a dependency: a library without
+        // it is better than no library, so a failed fetch is logged and the
+        // sync carries on.
+        var metadataPath = Path.Combine(_paths.PluginConfigurationsPath, "lelibrary-metadata.json");
+        var metadata = await new MetadataClient(http, metadataPath)
+            .FetchAsync(configuration.PlanUrl, cancellationToken)
+            .ConfigureAwait(false);
+        var document = AcceptMetadata(_metadata, metadata);
+        if (!metadata.Ok)
+        {
+            _log.LogWarning("LeLibrary: metadata unavailable, the items keep what they have: {Error}", metadata.Error);
         }
 
         if (!string.IsNullOrEmpty(fetch.Plan.Provider) && !string.Equals(fetch.Plan.Provider, provider.Provider, StringComparison.Ordinal))
@@ -150,7 +189,7 @@ public sealed class LeLibrarySync
                 fetch.Error ?? "the plan was not modified");
         }
 
-        var result = await _library.ApplyAsync(desired, movies, shows, playBase, allowRemovals, cancellationToken).ConfigureAwait(false);
+        var result = await _library.ApplyAsync(desired, movies, shows, playBase, allowRemovals, cancellationToken, document).ConfigureAwait(false);
         return new SyncOutcome(true, null, result);
     }
 }

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Jellyfin.Plugin.LeLibrary;
 using Jellyfin.Plugin.LeLibrary.Client;
+using Jellyfin.Plugin.LeLibrary.Model;
 using Jellyfin.Plugin.LeLibrary.Providers;
 using Xunit;
 
@@ -13,11 +14,45 @@ namespace Jellyfin.Plugin.LeLibrary.Tests;
 /// </summary>
 public class LeLibrarySyncTests
 {
+    private static MetadataDocument Document() => new()
+    {
+        Titles = new Dictionary<string, MetadataTitle>
+        {
+            ["movie:603"] = new() { Kind = "movie", Title = "The Matrix" },
+        },
+    };
+
     [Fact]
     public void OnlyAFreshPlanMayRemoveAnything()
     {
         Assert.True(LeLibrarySync.AllowRemovals(PlanSource.Network));
         Assert.False(LeLibrarySync.AllowRemovals(PlanSource.Cache));
+    }
+
+    [Fact]
+    public void AFetchedDocumentGoesWhereTheProvidersReadIt()
+    {
+        var holder = new MetadataHolder();
+        var document = Document();
+
+        var applied = LeLibrarySync.AcceptMetadata(
+            holder,
+            new MetadataFetch(true, null, document, PlanSource.Network));
+
+        Assert.Same(document, applied);
+        Assert.Same(document, holder.Document);
+    }
+
+    [Fact]
+    public void AFailedFetchKeepsTheDocumentTheProvidersAlreadyHave()
+    {
+        var holder = new MetadataHolder { Document = Document() };
+        var before = holder.Document;
+
+        var applied = LeLibrarySync.AcceptMetadata(holder, MetadataFetch.Failed("down"));
+
+        Assert.Null(applied);
+        Assert.Same(before, holder.Document);
     }
 
     [Fact]
