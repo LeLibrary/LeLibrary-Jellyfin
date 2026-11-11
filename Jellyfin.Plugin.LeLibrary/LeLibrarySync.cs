@@ -69,6 +69,20 @@ public sealed class LeLibrarySync
     public static bool AllowRemovals(PlanSource source) => source == PlanSource.Network;
 
     /// <summary>
+    /// Whether a fetched document has not been applied to this library yet. A
+    /// new one means every title in it is refreshed once — that is how an
+    /// upgrade picks up metadata for items that already existed, because a
+    /// metadata provider only runs when an item is refreshed.
+    /// </summary>
+    /// <param name="configuration">The plugin settings.</param>
+    /// <param name="fetch">The fetch result.</param>
+    /// <returns>True when the library should be refreshed.</returns>
+    public static bool ShouldRefreshMetadata(PluginConfiguration configuration, MetadataFetch fetch)
+        => fetch.Ok
+            && !string.IsNullOrEmpty(fetch.Etag)
+            && !string.Equals(configuration.AppliedMetadataEtag, fetch.Etag, StringComparison.Ordinal);
+
+    /// <summary>
     /// Puts a fetched metadata document where Jellyfin's providers read it, and
     /// returns the document this sync should attach art from.
     ///
@@ -144,6 +158,9 @@ public sealed class LeLibrarySync
             _log.LogWarning("LeLibrary: metadata unavailable, the items keep what they have: {Error}", metadata.Error);
         }
 
+        // A document the library has not been refreshed against yet means one
+        // pass over every title, so existing items get the metadata too.
+        var refreshMetadata = ShouldRefreshMetadata(configuration, metadata);
         if (!string.IsNullOrEmpty(fetch.Plan.Provider) && !string.Equals(fetch.Plan.Provider, provider.Provider, StringComparison.Ordinal))
         {
             return new SyncOutcome(false, $"the plan is for {fetch.Plan.Provider}, but the plugin is set to {provider.Provider}", null);
@@ -189,7 +206,16 @@ public sealed class LeLibrarySync
                 fetch.Error ?? "the plan was not modified");
         }
 
-        var result = await _library.ApplyAsync(desired, movies, shows, playBase, allowRemovals, cancellationToken, document).ConfigureAwait(false);
+        var result = await _library.ApplyAsync(desired, movies, shows, playBase, allowRemovals, cancellationToken, document, refreshMetadata).ConfigureAwait(false);
+
+        // Recorded only after the library was written: a failed sync must try
+        // the refresh again next time.
+        if (refreshMetadata)
+        {
+            configuration.AppliedMetadataEtag = metadata.Etag!;
+            Plugin.Instance?.UpdateConfiguration(configuration);
+        }
+
         return new SyncOutcome(true, null, result);
     }
 }

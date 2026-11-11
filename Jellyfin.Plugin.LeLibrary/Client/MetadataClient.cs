@@ -14,7 +14,8 @@ namespace Jellyfin.Plugin.LeLibrary.Client;
 /// <param name="Error">A readable reason when something went wrong.</param>
 /// <param name="Document">The document (empty when !Ok).</param>
 /// <param name="Source">Network or cache.</param>
-public sealed record MetadataFetch(bool Ok, string? Error, MetadataDocument Document, PlanSource Source)
+/// <param name="Etag">The document's ETag, when it came from the server or the cache.</param>
+public sealed record MetadataFetch(bool Ok, string? Error, MetadataDocument Document, PlanSource Source, string? Etag = null)
 {
     /// <summary>Gets an empty failed fetch.</summary>
     /// <param name="error">Why.</param>
@@ -105,7 +106,7 @@ public sealed class MetadataClient
 
             var etag = response.Headers.ETag?.ToString();
             WriteCache(new CachedMetadata(etag, body));
-            return new MetadataFetch(true, null, document, PlanSource.Network);
+            return new MetadataFetch(true, null, document, PlanSource.Network, etag);
         }
     }
 
@@ -139,7 +140,7 @@ public sealed class MetadataClient
 
         try
         {
-            return new MetadataFetch(true, error, Parse(cached.Body), PlanSource.Cache);
+            return new MetadataFetch(true, error, Parse(cached.Body), PlanSource.Cache, cached.Etag);
         }
         catch (JsonException)
         {
