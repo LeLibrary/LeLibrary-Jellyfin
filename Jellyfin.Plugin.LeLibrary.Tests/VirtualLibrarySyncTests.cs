@@ -9,6 +9,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Providers;
+using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -44,6 +45,7 @@ public class VirtualLibrarySyncTests
             ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 [VirtualIdentity.ProviderId] = "torbox:1:2",
+                ["Tmdb"] = "603",
             },
         };
 
@@ -54,6 +56,31 @@ public class VirtualLibrarySyncTests
             Array.Empty<VirtualItem>(),
             0);
     }
+
+    /// <summary>The metadata document for the plan the helpers build.</summary>
+    /// <returns>The document.</returns>
+    private static MetadataDocument Document() => new()
+    {
+        Titles = new Dictionary<string, MetadataTitle>(StringComparer.Ordinal)
+        {
+            ["movie:603"] = new()
+            {
+                Kind = "movie",
+                Title = "The Matrix",
+                Poster = "https://image.tmdb.org/t/p/w500/p.jpg",
+                Backdrop = "https://image.tmdb.org/t/p/w1280/b.jpg",
+            },
+            ["tv:63639"] = new()
+            {
+                Kind = "tv",
+                Poster = "https://artworks.thetvdb.com/series.jpg",
+                Episodes = new Dictionary<string, MetadataEpisode>(StringComparer.Ordinal)
+                {
+                    ["1:1"] = new() { Title = "Dulcinea", Still = "https://artworks.thetvdb.com/e1.jpg" },
+                },
+            },
+        },
+    };
 
     /// <summary>A movie row shaped like the one the previous version wrote.</summary>
     /// <param name="path">Its play URL.</param>
@@ -85,6 +112,7 @@ public class VirtualLibrarySyncTests
             ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 [VirtualIdentity.SeriesId] = "series:63639",
+                ["Tmdb"] = "63639",
             },
         };
 
@@ -118,6 +146,7 @@ public class VirtualLibrarySyncTests
                 ProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
                     [VirtualIdentity.ProviderId] = "torbox:7:" + number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["Tmdb"] = "63639",
                 },
             };
 
@@ -456,6 +485,52 @@ public class VirtualLibrarySyncTests
         Assert.False(series.ProviderIds.ContainsKey(VirtualIdentity.ProviderId));
         Assert.Equal(3, result.Added);
         Assert.Equal(0, result.Removed);
+    }
+
+    [Fact]
+    public async Task TheDocumentArtLandsOnTheItem()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default, Document());
+
+        var item = Assert.Single(writer.Items, i => i.GetType() == typeof(Movie));
+        Assert.Equal("https://image.tmdb.org/t/p/w500/p.jpg", item.GetImages(ImageType.Primary).Single().Path);
+        Assert.Equal("https://image.tmdb.org/t/p/w1280/b.jpg", item.GetImages(ImageType.Backdrop).Single().Path);
+    }
+
+    [Fact]
+    public async Task TheEpisodesStillLandsOnTheEpisode()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+
+        await library.ApplyAsync(
+            PlanWithASeriesOfThreeEpisodes(withFirstEpisode: true),
+            MoviesFolder(),
+            ShowsFolder(),
+            "http://host:8096",
+            true,
+            default,
+            Document());
+
+        var first = writer.Items.Single(i => i.GetType() == typeof(Episode) && i.IndexNumber == 1);
+        Assert.Equal("https://artworks.thetvdb.com/e1.jpg", first.GetImages(ImageType.Primary).Single().Path);
+    }
+
+    [Fact]
+    public async Task ASecondSyncWithTheSameDocumentChangesNothing()
+    {
+        var writer = new FakeLibraryWriter();
+        var library = NewLibrary(writer);
+        await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default, Document());
+
+        var second = await library.ApplyAsync(PlanWithOneMovie(), MoviesFolder(), ShowsFolder(), "http://host:8096", true, default, Document());
+
+        Assert.Equal(0, second.Added);
+        Assert.Equal(0, second.Updated);
+        Assert.Equal(1, second.Unchanged);
     }
 
     /// <summary>

@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.LeLibrary.Model;
+using Jellyfin.Plugin.LeLibrary.Providers;
 using Jellyfin.Plugin.LeLibrary.Virtual;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
@@ -135,8 +137,9 @@ public sealed class VirtualLibrary
     /// <param name="playBaseUrl">The base of the play URLs.</param>
     /// <param name="allowRemovals">Whether items that are no longer wanted may be deleted. A plan that came from a cache may not remove anything.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="metadata">The metadata document, when a sync fetched one.</param>
     /// <returns>What changed.</returns>
-    public Task<VirtualSyncResult> ApplyAsync(VirtualLibraryPlan desired, Folder moviesRoot, Folder showsRoot, string playBaseUrl, bool allowRemovals, CancellationToken cancellationToken)
+    public Task<VirtualSyncResult> ApplyAsync(VirtualLibraryPlan desired, Folder moviesRoot, Folder showsRoot, string playBaseUrl, bool allowRemovals, CancellationToken cancellationToken, MetadataDocument? metadata = null)
     {
         var existing = LoadExisting();
         // Grouped by parent: CreateItems takes one parent for the whole batch,
@@ -187,6 +190,10 @@ public sealed class VirtualLibrary
                 var playUrl = $"{playBaseUrl.TrimEnd('/')}/LeLibrary/play/{item.Key}/{Uri.EscapeDataString(item.FileName)}";
                 byPath[item.RelativePath] = item.Item;
 
+                // The document's art goes on before the item is written, so a
+                // new item carries it and an existing one is compared with it.
+                LeLibraryArt.Attach(item.Item, metadata);
+
                 if (existing.TryGetValue(identity, out var candidates))
                 {
                     // A library that doubled before the fix has more than one
@@ -216,6 +223,11 @@ public sealed class VirtualLibrary
                     current.IndexNumber = item.Item.IndexNumber;
                     current.ParentIndexNumber = item.Item.ParentIndexNumber;
                     current.Container = item.Item.Container;
+                    if (ImagesDiffer(current, item.Item))
+                    {
+                        current.ImageInfos = item.Item.ImageInfos;
+                    }
+
                     MergeProviderIds(current, item.Item);
                     if (changed)
                     {
@@ -367,7 +379,33 @@ public sealed class VirtualLibrary
             || current.ProductionYear != wanted.ProductionYear
             || current.IndexNumber != wanted.IndexNumber
             || current.ParentIndexNumber != wanted.ParentIndexNumber
-            || ProviderIdsDiffer(current, wanted);
+            || ProviderIdsDiffer(current, wanted)
+            || ImagesDiffer(current, wanted);
+
+    /// <summary>Whether the row's images are not the ones the plan wants.</summary>
+    /// <param name="current">The row.</param>
+    /// <param name="wanted">The item the plan built.</param>
+    /// <returns>True when the images have to be rewritten.</returns>
+    private static bool ImagesDiffer(BaseItem current, BaseItem wanted)
+    {
+        var mine = current.ImageInfos ?? Array.Empty<ItemImageInfo>();
+        var theirs = wanted.ImageInfos ?? Array.Empty<ItemImageInfo>();
+        if (mine.Length != theirs.Length)
+        {
+            return true;
+        }
+
+        for (var index = 0; index < mine.Length; index++)
+        {
+            if (mine[index].Type != theirs[index].Type
+                || !string.Equals(mine[index].Path, theirs[index].Path, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Whether the row's ids are not the ones the plan wants.
