@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Standalone Premiumize</title>
+</head>
+<body>
+<div id="StandaloneConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select">
+    <div data-role="content">
+        <div class="content-primary">
+            <form class="StandaloneConfigForm">
+                <div class="verticalSection">
+                    <h2>Standalone Premiumize</h2>
+                    <p class="fieldDescription">
+                        Turns your debrid library into Jellyfin media folders. Nothing is downloaded:
+                        the plugin writes playable links and Jellyfin streams straight from your account.
+                    </p>
+                </div>
+
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="debridApiKey">Debrid API key</label>
+                    <input is="emby-input" type="password" id="debridApiKey" name="DebridApiKey" autocomplete="off" />
+                    <div class="fieldDescription">
+                        Jellyfin stores plugin settings as plain XML on disk. Anyone who can read the
+                        config directory can read this key. Protect the host or the disk.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="serverUrl">Server URL</label>
+                    <input is="emby-input" type="text" id="serverUrl" name="ServerUrl" autocomplete="off" />
+                    <div class="fieldDescription">
+                        The address players use to reach this Jellyfin server, for example
+                        http://192.168.1.20:8096. Leave empty to use the address Jellyfin reports;
+                        in Docker that is often the container's own and unreachable from a player.
+                    </div>
+                </div>
+
+                <div class="selectContainer">
+                    <label class="selectLabel" for="syncHours">Sync every</label>
+                    <select is="emby-select" id="syncHours" name="SyncHours" class="emby-select-withcolor emby-select">
+                        <option value="1">1 hour</option>
+                        <option value="3">3 hours</option>
+                        <option value="6">6 hours</option>
+                        <option value="12">12 hours</option>
+                        <option value="24">24 hours</option>
+                    </select>
+                </div>
+
+                <div class="editPageFooter" style="display:flex;gap:1em;flex-wrap:wrap;align-items:center;">
+                    <button is="emby-button" type="submit" class="raised button-submit emby-button">
+                        <span>Save</span>
+                    </button>
+                    <button is="emby-button" type="button" id="probeButton" class="raised emby-button">
+                        <span>Test key</span>
+                    </button>
+                    <button is="emby-button" type="button" id="syncButton" class="raised emby-button">
+                        <span>Run sync now</span>
+                    </button>
+                    <span id="actionStatus" role="status"></span>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            var pluginId = 'd0c65588-3905-487d-989b-d0d6b601b01d';
+            var page = document.querySelector('#StandaloneConfigPage');
+            var form = page.querySelector('.StandaloneConfigForm');
+
+            function load() {
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    form.querySelector('#debridApiKey').value = config.DebridApiKey || '';
+                    form.querySelector('#serverUrl').value = config.ServerUrl || '';
+                    form.querySelector('#syncHours').value = String(config.SyncHours || 6);
+                });
+            }
+
+            form.addEventListener('submit', function (event) {
+                event.preventDefault();
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    config.DebridApiKey = form.querySelector('#debridApiKey').value;
+                    config.ServerUrl = form.querySelector('#serverUrl').value;
+                    config.SyncHours = parseInt(form.querySelector('#syncHours').value, 10);
+                    return ApiClient.updatePluginConfiguration(pluginId, config);
+                }).then(function (result) {
+                    Dashboard.processPluginConfigurationUpdateResult(result);
+                });
+            });
+
+            function setStatus(text) {
+                page.querySelector('#actionStatus').textContent = text || '';
+            }
+
+            function post(url) {
+                return ApiClient.ajax({
+                    type: 'POST',
+                    url: ApiClient.getUrl(url),
+                    dataType: 'json'
+                }).then(function (result) {
+                    setStatus(result && result.message ? result.message : 'Done.');
+                }).catch(function () {
+                    setStatus('That did not work. Check the server log for the reason.');
+                });
+            }
+
+            page.querySelector('#probeButton').addEventListener('click', function () {
+                setStatus('Checking the key...');
+                post('StandalonePremiumize/probe');
+            });
+
+            page.querySelector('#syncButton').addEventListener('click', function () {
+                setStatus('Syncing... this can take a minute on a large library.');
+                post('StandalonePremiumize/sync');
+            });
+
+            load();
+        })();
+    </script>
+</div>
+</body>
+</html>
