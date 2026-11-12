@@ -112,6 +112,25 @@ public class TorboxClientTests
         Assert.Equal(ProviderHealth.Unavailable, listing.Health);
     }
 
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"success\":false,\"data\":[]}")]
+    [InlineData("{\"success\":true,\"data\":null}")]
+    [InlineData("{\"success\":true,\"data\":[{\"id\":1}]}")]
+    [InlineData("{\"success\":true,\"data\":[{\"id\":1,\"files\":[{}]}]}")]
+    [InlineData("not json")]
+    public async Task AnInvalidPageCannotBeTreatedAsACompleteListing(string body)
+    {
+        var handler = new StubHandler()
+            .Json(r => r.RequestUri!.Query.Contains("offset=0"), Page(1, (2, "movie.mkv", 100)))
+            .Json(_ => true, body);
+
+        var listing = await Client(handler).ListLibraryAsync(CancellationToken.None);
+
+        Assert.False(listing.IsHealthy);
+        Assert.Empty(listing.Files);
+    }
+
     [Fact]
     public async Task MintReturnsTheLink()
     {

@@ -1,0 +1,301 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Net;
+using System.Net.Http;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Jellyfin.Plugin.Standalone.TorBox.Providers;
+
+/// <summary>
+/// TorBox: torrents only. Usenet and web downloads number their items in the
+/// same namespace as torrents, so they are a separate family and not part of a
+/// torrent plan.
+/// </summary>
+public sealed class TorboxClient : IDebridClient
+{
+    private const int PageSize = 1000;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, RequestPacer> Pacers = new(StringComparer.Ordinal);
+
+    private readonly HttpClient _http;
+    private readonly string _apiKey;
+
+    /// <summary>Initializes a new instance of the <see cref="TorboxClient"/> class.</summary>
+    /// <param name="http">The HTTP client (base address https://api.torbox.app/).</param>
+    /// <param name="apiKey">The user's own TorBox key.</param>
+    public TorboxClient(HttpClient http, string apiKey)
+    {
+        _http = http;
+        _apiKey = apiKey;
+    }
+
+    /// <inheritdoc />
+    public string Provider => "torbox";
+
+    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+    {
+        var uri = request.RequestUri;
+        var endpoint = uri is null ? string.Empty : uri.IsAbsoluteUri ? uri.AbsolutePath : uri.OriginalString.Split('?', 2)[0];
+        var pacer = Pacers.GetOrAdd(endpoint, _ => new RequestPacer());
+        await pacer.Gate.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            var delay = pacer.Next - Environment.TickCount64;
+            if (delay > 0) await Task.Delay(TimeSpan.FromMilliseconds(delay), token).ConfigureAwait(false);
+            pacer.Next = Environment.TickCount64 + 750;
+        }
+        finally { pacer.Gate.Release(); }
+        return await _http.SendAsync(request, token).ConfigureAwait(false);
+    }
+
+    private sealed class RequestPacer
+    {
+        public SemaphoreSlim Gate { get; } = new(1, 1);
+        public long Next { get; set; }
+    }
+
+    /// <inheritdoc />
+    public async Task<ProviderListing> ListLibraryAsync(CancellationToken cancellationToken)
+    {
+        var files = new List<DebridFile>();
+        var seen = new HashSet<long>();
+        for (var offset = 0; ; offset += PageSize)
+        {
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"v1/api/torrents/mylist?bypass_cache=true&limit={PageSize}&offset={offset}");
+            request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_apiKey}");
+
+            HttpResponseMessage response;
+            try
+            {
+                response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception err) when (err is HttpRequestException or TaskCanceledException)
+            {
+                return new ProviderListing(ProviderHealth.Unavailable, new List<DebridFile>(), "TorBox could not be reached");
+            }
+
+            using (response)
+            {
+                if (response.StatusCode == HttpStatusCode.Forbidden || response.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    return new ProviderListing(ProviderHealth.InvalidKey, new List<DebridFile>(), "TorBox rejected the API key");
+                }
+
+                if ((int)response.StatusCode == 429)
+                {
+                    return new ProviderListing(ProviderHealth.RateLimited, new List<DebridFile>(), "TorBox is rate limiting this account");
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return new ProviderListing(ProviderHealth.Unavailable, new List<DebridFile>(), $"TorBox answered {(int)response.StatusCode}");
+                }
+
+                var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                List<(long TorrentId, string? ReleaseName, List<(long? Id, string? Name, long Size)> Files)> page;
+                try
+                {
+                    page = ReadTorrents(body);
+                }
+                catch (JsonException)
+                {
+                    return new ProviderListing(ProviderHealth.Unavailable, new List<DebridFile>(), "TorBox returned an incomplete or invalid listing");
+                }
+                if (page.Count == 0)
+                {
+                    break;
+                }
+
+                foreach (var (torrentId, releaseName, torrentFiles) in page)
+                {
+                    if (!seen.Add(torrentId))
+                        return new ProviderListing(ProviderHealth.Unavailable, new List<DebridFile>(), "TorBox pages overlapped; try syncing again");
+                    foreach (var file in torrentFiles)
+                    {
+                        if (file.Id is null) continue;
+                        files.Add(new DebridFile(
+                            $"{Provider}:{torrentId}:{file.Id.Value}",
+                            file.Name ?? string.Empty,
+                            file.Size,
+                            releaseName));
+                    }
+                }
+
+                // A short page can still be followed by more (the API is not
+                // strict about the limit), so only an empty page ends the walk.
+                // The page cap is a backstop against a provider that always
+                // answers: 2,000 pages is 200,000 downloads.
+                if (offset >= PageSize * 2000)
+                {
+                    return new ProviderListing(ProviderHealth.Unavailable, new List<DebridFile>(), "TorBox listing exceeded the page limit");
+                }
+            }
+        }
+
+        return new ProviderListing(ProviderHealth.Healthy, files, null);
+    }
+
+    /// <inheritdoc />
+    public async Task<MintResult> MintAsync(string key, CancellationToken cancellationToken)
+    {
+        if (!PlanKey.TryParse(key, out var parsed) || parsed.Provider != Provider)
+        {
+            return MintResult.Fail(MintStatus.NotFound);
+        }
+
+        var url = $"v1/api/torrents/requestdl?token={Uri.EscapeDataString(_apiKey)}"
+            + $"&torrent_id={Uri.EscapeDataString(parsed.ItemId)}"
+            + $"&file_id={Uri.EscapeDataString(parsed.FileId)}"
+            + "&zip_link=false";
+
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_apiKey}");
+            try
+            {
+                using var response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
+                if ((int)response.StatusCode >= 500 && attempt == 0)
+                {
+                    continue;
+                }
+
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    return MintResult.Fail(MintStatus.NotFound);
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return MintResult.Fail(MintStatus.Error);
+                }
+
+                var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                using var document = JsonDocument.Parse(body);
+                var root = document.RootElement;
+                if (root.TryGetProperty("success", out var success) && success.ValueKind == JsonValueKind.False)
+                {
+                    return MintResult.Fail(MintStatus.Error);
+                }
+
+                return root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.String
+                    ? new MintResult(MintStatus.Ok, data.GetString())
+                    : MintResult.Fail(MintStatus.Error);
+            }
+            catch (Exception err) when (err is HttpRequestException or JsonException or TaskCanceledException)
+            {
+                if (attempt == 0) continue;
+                return MintResult.Fail(MintStatus.Error);
+            }
+        }
+
+        return MintResult.Fail(MintStatus.Error);
+    }
+
+    /// <inheritdoc />
+    public async Task<ProviderHealth> ProbeAsync(CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "v1/api/user/me");
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_apiKey}");
+        try
+        {
+            using var response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (response.StatusCode == HttpStatusCode.Forbidden || response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                return ProviderHealth.InvalidKey;
+            }
+
+            if ((int)response.StatusCode == 429) return ProviderHealth.RateLimited;
+            if (!response.IsSuccessStatusCode) return ProviderHealth.Unavailable;
+
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.TryGetProperty("success", out var success) && success.ValueKind == JsonValueKind.False)
+            {
+                return ProviderHealth.InvalidKey;
+            }
+
+            return ProviderHealth.Healthy;
+        }
+        catch (Exception err) when (err is HttpRequestException or JsonException or TaskCanceledException)
+        {
+            return ProviderHealth.Unavailable;
+        }
+    }
+
+    private static List<(long TorrentId, string? ReleaseName, List<(long? Id, string? Name, long Size)> Files)> ReadTorrents(string body)
+    {
+        var result = new List<(long, string?, List<(long?, string?, long)>)>();
+        using var document = JsonDocument.Parse(body);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("success", out var success) || success.ValueKind != JsonValueKind.True)
+        {
+            throw new JsonException("TorBox did not return a successful listing");
+        }
+
+        if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+        {
+            throw new JsonException("TorBox did not return a listing array");
+        }
+
+        foreach (var torrent in data.EnumerateArray())
+        {
+            if (torrent.ValueKind != JsonValueKind.Object || !torrent.TryGetProperty("id", out var idElement) || !TryLong(idElement, out var torrentId))
+            {
+                throw new JsonException("TorBox returned a torrent without an id");
+            }
+
+            var files = new List<(long?, string?, long)>();
+            if (!torrent.TryGetProperty("files", out var fileArray) || fileArray.ValueKind != JsonValueKind.Array)
+            {
+                throw new JsonException("TorBox returned a torrent without its files");
+            }
+
+            if (fileArray.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var file in fileArray.EnumerateArray())
+                {
+                    if (file.ValueKind != JsonValueKind.Object)
+                    {
+                        throw new JsonException("TorBox returned an invalid file");
+                    }
+                    long? fileId = file.TryGetProperty("id", out var fileIdElement) && TryLong(fileIdElement, out var parsedId)
+                        ? parsedId
+                        : null;
+                    if (fileId is null)
+                    {
+                        throw new JsonException("TorBox returned a file without an id");
+                    }
+                    var name = file.TryGetProperty("name", out var nameElement) && nameElement.ValueKind == JsonValueKind.String
+                        ? nameElement.GetString()
+                        : null;
+                    long size = file.TryGetProperty("size", out var sizeElement) && TryLong(sizeElement, out var parsedSize)
+                        ? parsedSize
+                        : 0;
+                    files.Add((fileId, name, size));
+                }
+            }
+
+            var releaseName = torrent.TryGetProperty("name", out var title) && title.ValueKind == JsonValueKind.String ? title.GetString() : null;
+            result.Add((torrentId, releaseName, files));
+        }
+
+        return result;
+    }
+
+    private static bool TryLong(JsonElement element, out long value)
+    {
+        value = 0;
+        return element.ValueKind switch
+        {
+            JsonValueKind.Number => element.TryGetInt64(out value),
+            JsonValueKind.String => long.TryParse(element.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value),
+            _ => false,
+        };
+    }
+}

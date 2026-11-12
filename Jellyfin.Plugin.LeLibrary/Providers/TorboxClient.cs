@@ -72,13 +72,21 @@ public sealed class TorboxClient : IDebridClient
                 }
 
                 var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                var page = ReadTorrents(body);
+                List<(long TorrentId, string? ReleaseName, List<(long? Id, string? Name, long Size)> Files)> page;
+                try
+                {
+                    page = ReadTorrents(body);
+                }
+                catch (JsonException)
+                {
+                    return new ProviderListing(ProviderHealth.Unavailable, new List<DebridFile>(), "TorBox returned an incomplete or invalid listing");
+                }
                 if (page.Count == 0)
                 {
                     break;
                 }
 
-                foreach (var (torrentId, torrentFiles) in page)
+                foreach (var (torrentId, releaseName, torrentFiles) in page)
                 {
                     foreach (var file in torrentFiles)
                     {
@@ -86,7 +94,8 @@ public sealed class TorboxClient : IDebridClient
                         files.Add(new DebridFile(
                             $"{Provider}:{torrentId}:{file.Id.Value}",
                             file.Name ?? string.Empty,
-                            file.Size));
+                            file.Size,
+                            releaseName));
                     }
                 }
 
@@ -96,7 +105,7 @@ public sealed class TorboxClient : IDebridClient
                 // answers: 2,000 pages is 200,000 downloads.
                 if (offset >= PageSize * 2000)
                 {
-                    break;
+                    return new ProviderListing(ProviderHealth.Unavailable, new List<DebridFile>(), "TorBox listing exceeded the page limit");
                 }
             }
         }
@@ -192,36 +201,50 @@ public sealed class TorboxClient : IDebridClient
         }
     }
 
-    private static List<(long TorrentId, List<(long? Id, string? Name, long Size)> Files)> ReadTorrents(string body)
+    private static List<(long TorrentId, string? ReleaseName, List<(long? Id, string? Name, long Size)> Files)> ReadTorrents(string body)
     {
-        var result = new List<(long, List<(long?, string?, long)>)>();
+        var result = new List<(long, string?, List<(long?, string?, long)>)>();
         using var document = JsonDocument.Parse(body);
         var root = document.RootElement;
-        if (root.TryGetProperty("success", out var success) && success.ValueKind == JsonValueKind.False)
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("success", out var success) || success.ValueKind != JsonValueKind.True)
         {
-            return result;
+            throw new JsonException("TorBox did not return a successful listing");
         }
 
         if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
         {
-            return result;
+            throw new JsonException("TorBox did not return a listing array");
         }
 
         foreach (var torrent in data.EnumerateArray())
         {
-            if (!torrent.TryGetProperty("id", out var idElement) || !TryLong(idElement, out var torrentId))
+            if (torrent.ValueKind != JsonValueKind.Object || !torrent.TryGetProperty("id", out var idElement) || !TryLong(idElement, out var torrentId))
             {
-                continue;
+                throw new JsonException("TorBox returned a torrent without an id");
             }
 
             var files = new List<(long?, string?, long)>();
-            if (torrent.TryGetProperty("files", out var fileArray) && fileArray.ValueKind == JsonValueKind.Array)
+            if (!torrent.TryGetProperty("files", out var fileArray) || fileArray.ValueKind != JsonValueKind.Array)
+            {
+                throw new JsonException("TorBox returned a torrent without its files");
+            }
+
+            if (fileArray.ValueKind == JsonValueKind.Array)
             {
                 foreach (var file in fileArray.EnumerateArray())
                 {
+                    if (file.ValueKind != JsonValueKind.Object)
+                    {
+                        throw new JsonException("TorBox returned an invalid file");
+                    }
                     long? fileId = file.TryGetProperty("id", out var fileIdElement) && TryLong(fileIdElement, out var parsedId)
                         ? parsedId
                         : null;
+                    if (fileId is null)
+                    {
+                        throw new JsonException("TorBox returned a file without an id");
+                    }
                     var name = file.TryGetProperty("name", out var nameElement) && nameElement.ValueKind == JsonValueKind.String
                         ? nameElement.GetString()
                         : null;
@@ -232,7 +255,8 @@ public sealed class TorboxClient : IDebridClient
                 }
             }
 
-            result.Add((torrentId, files));
+            var releaseName = torrent.TryGetProperty("name", out var title) && title.ValueKind == JsonValueKind.String ? title.GetString() : null;
+            result.Add((torrentId, releaseName, files));
         }
 
         return result;

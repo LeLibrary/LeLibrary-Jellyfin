@@ -25,7 +25,7 @@ public enum ProviderHealth
 /// <param name="Key">The plan key: provider:itemId:fileId.</param>
 /// <param name="Name">The file name inside the download.</param>
 /// <param name="Size">The size in bytes.</param>
-public sealed record DebridFile(string Key, string Name, long Size);
+public sealed record DebridFile(string Key, string Name, long Size, string? ReleaseName = null);
 
 /// <summary>How a link request ended.</summary>
 public enum MintStatus

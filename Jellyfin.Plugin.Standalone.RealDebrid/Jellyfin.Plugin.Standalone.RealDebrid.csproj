@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Jellyfin 12 only, like zurg's plugins. 12.x runs on .NET 10 (the NuGet
+       package ships lib/net10.0), so one target, one build, one zip. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RootNamespace>Jellyfin.Plugin.Standalone.RealDebrid</RootNamespace>
+    <AssemblyName>Jellyfin.Plugin.Standalone.RealDebrid</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <Version>0.0.1.0</Version>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <AssemblyVersion>0.0.1.0</AssemblyVersion>
+    <FileVersion>0.0.1.0</FileVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Jellyfin.Controller" Version="12.4.0" />
+    <PackageReference Include="Jellyfin.Model" Version="12.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Configuration/configPage.html" />
+    <!-- Jellyfin picks this up as the plugin's own image: catalogue, plugin
+         list and detail page all read it from the installed folder. -->
+    <Content Include="thumb.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
