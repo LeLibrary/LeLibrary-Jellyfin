@@ -20,7 +20,7 @@ for code,label,guid in providers:
   z.write(project/'bin/Release/net10.0'/dll,dll)
   z.write(project/'thumb.png','thumb.png')
  digest=hashlib.md5(archive.read_bytes(),usedforsecurity=False).hexdigest()
- manifest.append({'guid':guid,'name':f'Standalone {label}','description':f'Development build for {label}.','overview':'DEV TEST ONLY.','owner':'Standalone','category':'General','versions':[{'version':'0.0.1.0','changelog':'Development test build.','targetAbi':'12.0.0.0','sourceUrl':f'{base}/{zipname}','checksum':digest,'timestamp':'2026-11-11T00:00:00Z'}]})
+ manifest.append({'guid':guid,'name':f'Standalone {label}','description':f'Development build for {label}.','overview':'DEV TEST ONLY.','owner':'Standalone','category':'General','versions':[{'version':'0.0.1.0','changelog':'Development test build.','targetAbi':'12.4.0.0','sourceUrl':f'{base}/{zipname}','checksum':digest,'timestamp':'2026-11-11T00:00:00Z'}]})
 (out/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
 print('Local development repository:',out)
 PY
