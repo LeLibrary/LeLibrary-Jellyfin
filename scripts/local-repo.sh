@@ -13,9 +13,17 @@ DOTNET="${DOTNET:-dotnet}"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
+# The package version is the oldest Jellyfin API the binary is built against.
+# Advertising an older ABI makes Jellyfin install a plugin it cannot load.
+api_version="$(sed -n 's/.*PackageReference Include="Jellyfin.Controller" Version="\([0-9.]*\)".*/\1/p' "$ROOT/Jellyfin.Plugin.LeLibrary/Jellyfin.Plugin.LeLibrary.csproj")"
+if [[ ! "$api_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Cannot determine Jellyfin.Controller compatibility version" >&2
+  exit 1
+fi
+
 # Jellyfin 12 only: one target, one zip.
 targets=(
-  "net10.0:12.0.0.0"
+  "net10.0:${api_version}.0"
 )
 
 versions_json=""
@@ -35,7 +43,7 @@ for entry in "${targets[@]}"; do
 
   versions_json+=$(printf '%s' "{
       \"version\": \"${VERSION}\",
-      \"changelog\": \"See the release notes.\",
+      \"changelog\": \"Fixes plugin loading and settings on Jellyfin 12.0; improves protection against incomplete TorBox listings.\",
       \"targetAbi\": \"${abi}\",
       \"sourceUrl\": \"${SOURCE_BASE:-file://$OUT}/$name\",
       \"checksum\": \"$checksum\",

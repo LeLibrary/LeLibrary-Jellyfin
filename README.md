@@ -3,7 +3,7 @@
 Turn your debrid account into a normal Jellyfin library: movies, shows, seasons
 and episodes, named and matched the way LeLibrary names them.
 
-**Status: released (0.1.9).** The loop is verified end to end on a real library
+**Status: released (0.1.10).** The loop is verified end to end on a real library
 (36,000+ files, movies and episodes, Range playback through Jellyfin), and the
 metadata — overviews, genres, ratings, episode titles, artwork — is served by
 LeLibrary rather than Jellyfin's own TMDb and TVDB plugins.
