@@ -47,12 +47,8 @@ credentials, without a live account. Their error responses informed the
 AllDebrid and Premiumize authentication handling; this does not validate a
 successful live login, a real library or playback.
 
-## external project source review
+## Provider-specific behavior
 
-The current external project source was reviewed as a reference, not as a dependency.
-Provider listing, cache and playback behavior differ: for example,
-`internal/torbox/listing.go` uses paged listings, while
-`internal/alldebrid/files.go` resolves magnet details in batches. external project's DAV
-and streaming code address filesystem exposure and playback; the standalone
-plugins use Jellyfin's own integration and do not require external project. No external project change
-has been established as necessary for this project.
+Provider listing, caching and playback behavior differ. Each standalone
+plugin communicates directly with its provider and uses Jellyfin's own
+integration without requiring an external mount.
