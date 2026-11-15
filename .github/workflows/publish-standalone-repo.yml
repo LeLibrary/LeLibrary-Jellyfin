@@ -42,6 +42,12 @@ jobs:
           expected = {'eedbc5ae-56c4-4145-9a2b-c12716963c95', '6d1185f2-1db4-4f9d-bca8-1cb24aa1fdb7', '7aa38d7a-bd3f-4b1d-81be-49f9cc1bf09d', 'd0c65588-3905-487d-989b-d0d6b601b01d', '8858565b-f937-4d4d-b081-57044455fda1'}
           if not isinstance(entries, list) or not expected.issubset({entry.get('guid', '').lower() for entry in entries}):
               raise SystemExit('Repository is missing a standalone or legacy plugin entry')
+          for entry in entries:
+              if entry.get('guid', '').lower() in expected - {'8858565b-f937-4d4d-b081-57044455fda1'}:
+                  for version in entry.get('versions', []):
+                      if version.get('changelog') == 'Standalone development release; see release notes.':
+                          version['changelog'] = 'Standalone release; see release notes.'
+          Path('repository/manifest.json').write_text(json.dumps(entries, indent=2) + '\n')
           PY
       - uses: actions/upload-pages-artifact@v3
         with:

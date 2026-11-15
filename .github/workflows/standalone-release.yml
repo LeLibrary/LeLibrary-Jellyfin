@@ -36,7 +36,7 @@ jobs:
       - name: Publish release archives
         uses: softprops/action-gh-release@v2
         with:
-          prerelease: true
+          prerelease: false
           body_path: STANDALONE-RELEASE-NOTES.md
           files: artifacts/standalone-repo/*.zip
       - name: Upload repository

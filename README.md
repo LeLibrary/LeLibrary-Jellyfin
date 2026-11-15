@@ -34,6 +34,10 @@ or delete existing libraries, watched data or provider files.
 Jellyfin stores plugin settings as XML on disk. Protect the server's
 configuration directory, which contains the provider API key.
 
+## Issues and feedback
+
+If you encounter a problem, please [open an issue](https://github.com/LeLibrary/LeLibrary-Jellyfin/issues) with your Jellyfin version, provider and relevant logs so we can investigate. Remove API keys and other credentials before sharing logs.
+
 ## Development
 
 Build and test with the .NET 10 SDK:

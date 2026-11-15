@@ -6,10 +6,9 @@ route and metadata queue. They do not use a LeLibrary account, setup URL,
 backend, metadata or artwork service. Jellyfin's configured metadata and image
 providers perform identification and artwork retrieval.
 
-These projects are development builds, not a public release. The local
-`scripts/standalone-repo.sh` manifest targets Jellyfin 12.4 and is only for
-isolated testing. The public release workflow still packages the separately
-maintained, LeLibrary-connected plugin.
+The local `scripts/standalone-repo.sh` manifest targets Jellyfin 12.4 and is
+for isolated testing. The standalone release workflow publishes all four
+plugins while preserving the separately maintained legacy plugin.
 
 ## DEV validation
 
@@ -38,9 +37,7 @@ accounts, all release naming formats, complete season packs or every Jellyfin
 client. The plugins currently perform additive synchronization; safe cleanup and
 non-destructive migration from existing libraries are not complete. Live
 provider testing, large-library measurements with current code, rate-limit
-recovery and broader metadata retry resilience remain release gates for a
-stable release. The repository is prepared for a clearly labelled preview;
-the preview must not be described as tested against live provider accounts.
+recovery and broader metadata retry resilience remain outstanding.
 
 The documented account endpoints were also contacted with deliberately invalid
 credentials, without a live account. Their error responses informed the

@@ -1,12 +1,12 @@
 # Changelog
 
-## Standalone 0.0.1 preview
+## Standalone 0.0.1
 
-- Added separate development plugins for TorBox, Real-Debrid, AllDebrid and
+- Added separate plugins for TorBox, Real-Debrid, AllDebrid and
   Premiumize, each with its own provider settings and direct API client. These
   plugins do not use the LeLibrary backend or setup token.
 - Added local library building, Jellyfin-native metadata and artwork refresh,
-  streaming proxy infrastructure and a development repository manifest.
+  streaming proxy infrastructure and a shared repository manifest.
 - Gave each provider its own settings page, protected unrelated existing
   libraries from being reused, and retried failed native metadata refreshes.
 - Let Jellyfin populate episode titles during the initial metadata refresh;
@@ -18,8 +18,7 @@
   Usenet can be enabled independently when the account supports them.
 - Tested all four against mocked provider APIs in Jellyfin DEV, including movie
   identification, artwork and ranged playback. Further live-provider,
-  large-library, migration, recovery and playback tests are required before
-  these plugins can be considered a stable release.
+  large-library, migration, recovery and playback testing remains outstanding.
 
 ## 0.1.10
 

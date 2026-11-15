@@ -40,7 +40,7 @@ for code,label,guid in providers:
  if not isinstance(old_versions,list): raise SystemExit(f'Invalid version history for {code}')
  if release and any(old.get('version') == version for old in old_versions):
   raise SystemExit(f'{code} version {version} is already published; increment it first')
- versions=[{'version':version,'changelog':('Standalone development release; see release notes.' if release else 'Development test build.'),'targetAbi':abi,'sourceUrl':f'{base}/{zipname}','checksum':digest,'timestamp':datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}]
+ versions=[{'version':version,'changelog':('Standalone release; see release notes.' if release else 'Development test build.'),'targetAbi':abi,'sourceUrl':f'{base}/{zipname}','checksum':digest,'timestamp':datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}]
  versions.extend(old for old in old_versions if old.get('version') != version)
  manifest.append({'guid':guid,'name':f'Standalone {label}','description':f'Direct {label} connection for Jellyfin.',
   'overview':('Connects directly to the configured provider; Jellyfin fetches metadata and artwork.' if release else 'DEV TEST ONLY.'),
