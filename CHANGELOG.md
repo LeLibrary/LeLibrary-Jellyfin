@@ -1,5 +1,9 @@
 # Changelog
 
+## Provider plugins 0.0.3
+
+- Use the provider names for newly created Jellyfin libraries while reusing existing libraries by their owned paths.
+
 ## Provider plugins 0.0.2
 
 - Renamed the provider plugins to LeLibrary TB, RD, AD and PM across the catalog and settings.

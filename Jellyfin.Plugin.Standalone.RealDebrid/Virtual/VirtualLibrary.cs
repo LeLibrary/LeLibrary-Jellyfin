@@ -85,7 +85,9 @@ public sealed class VirtualLibrary
             File.WriteAllText(anchor, "This folder stays empty. The items are stored in Jellyfin's database.\n");
         }
 
-        var existing = _library.GetVirtualFolders().Find(folder => string.Equals(folder.Name, name, StringComparison.OrdinalIgnoreCase));
+        var folders = _library.GetVirtualFolders();
+        var existing = folders.Find(folder => IsOwnedLibrary(folder, path, collectionType))
+            ?? folders.Find(folder => string.Equals(folder.Name, name, StringComparison.OrdinalIgnoreCase));
         if (existing is null)
         {
             var options = new LibraryOptions

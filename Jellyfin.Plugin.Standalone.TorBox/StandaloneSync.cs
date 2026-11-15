@@ -44,7 +44,7 @@ public sealed class StandaloneSync
         if (!listing.IsHealthy) return new(false, listing.Error ?? "TorBox listing failed.", null);
         var (plan, _) = new LocalPlanBuilder(_manager.ParseName).Build(provider.Provider, listing.Files);
         var desired = VirtualItemFactory.Build(plan, StandaloneSync.FileNamesByKey(listing.Files));
-        var (movies, shows) = await _library.EnsureLibrariesAsync(Path.Combine(_paths.DataPath, "standalone-torbox"), "Standalone TorBox", cancellationToken).ConfigureAwait(false);
+        var (movies, shows) = await _library.EnsureLibrariesAsync(Path.Combine(_paths.DataPath, "standalone-torbox"), "LeLibrary TB", cancellationToken).ConfigureAwait(false);
         if (movies is null || shows is null) return new(false, "The Jellyfin libraries could not be created.", null);
         var baseUrl = string.IsNullOrWhiteSpace(configuration.ServerUrl) ? _host.GetApiUrlForLocalAccess() : configuration.ServerUrl.Trim();
         var result = await _library.ApplyAsync(desired, movies, shows, baseUrl, false, cancellationToken).ConfigureAwait(false);
