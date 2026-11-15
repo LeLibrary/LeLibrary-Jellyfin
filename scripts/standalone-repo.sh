@@ -16,7 +16,7 @@ release=os.environ.get('STANDALONE_REPO_RELEASE') == '1'
 previous=os.environ.get('STANDALONE_EXISTING_MANIFEST')
 if release and (urllib.parse.urlparse(base).scheme != 'https' or not previous):
  raise SystemExit('Release packaging requires an HTTPS STANDALONE_REPO_BASE and STANDALONE_EXISTING_MANIFEST')
-providers=[('TorBox','TorBox','eedbc5ae-56c4-4145-9a2b-c12716963c95'),('RealDebrid','Real-Debrid','6d1185f2-1db4-4f9d-bca8-1cb24aa1fdb7'),('AllDebrid','AllDebrid','7aa38d7a-bd3f-4b1d-81be-49f9cc1bf09d'),('Premiumize','Premiumize','d0c65588-3905-487d-989b-d0d6b601b01d')]
+providers=[('TorBox','TB','eedbc5ae-56c4-4145-9a2b-c12716963c95'),('RealDebrid','RD','6d1185f2-1db4-4f9d-bca8-1cb24aa1fdb7'),('AllDebrid','AD','7aa38d7a-bd3f-4b1d-81be-49f9cc1bf09d'),('Premiumize','PM','d0c65588-3905-487d-989b-d0d6b601b01d')]
 manifest=json.loads(pathlib.Path(previous).read_text()) if previous else []
 if not isinstance(manifest,list): raise SystemExit('Existing manifest must contain an array')
 ids={p[2].lower() for p in providers}
@@ -31,7 +31,7 @@ for code,label,guid in providers:
  if len(refs) != 1 or not re.fullmatch(r'\d+\.\d+\.\d+',refs[0] or ''):
   raise SystemExit(f'Cannot determine Jellyfin API version for {code}')
  abi=refs[0]+'.0'
- zipname=f'Standalone-{code}-{version}.zip'; archive=out/zipname
+ zipname=f'LeLibrary-{label}-{version}.zip'; archive=out/zipname
  with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
   z.write(project/'bin/Release/net10.0'/dll,dll)
   z.write(project/'thumb.png','thumb.png')
@@ -40,9 +40,9 @@ for code,label,guid in providers:
  if not isinstance(old_versions,list): raise SystemExit(f'Invalid version history for {code}')
  if release and any(old.get('version') == version for old in old_versions):
   raise SystemExit(f'{code} version {version} is already published; increment it first')
- versions=[{'version':version,'changelog':('Standalone release; see release notes.' if release else 'Development test build.'),'targetAbi':abi,'sourceUrl':f'{base}/{zipname}','checksum':digest,'timestamp':datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}]
+ versions=[{'version':version,'changelog':('Provider plugin release; see release notes.' if release else 'Development test build.'),'targetAbi':abi,'sourceUrl':f'{base}/{zipname}','checksum':digest,'timestamp':datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}]
  versions.extend(old for old in old_versions if old.get('version') != version)
- manifest.append({'guid':guid,'name':f'Standalone {label}','description':f'Direct {label} connection for Jellyfin.',
+ manifest.append({'guid':guid,'name':f'LeLibrary {label}','description':f'Direct {code} connection for Jellyfin.',
   'overview':('Connects directly to the configured provider; Jellyfin fetches metadata and artwork.' if release else 'DEV TEST ONLY.'),
   'owner':'LeLibrary','category':'General','versions':versions})
 (out/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')

@@ -57,7 +57,7 @@ public sealed class PlaybackProxy
         var provider = _provider();
         if (!PlanKey.TryParse(key, out var parsed) || parsed.Provider != provider.Provider)
         {
-            return Error(400, "not a playable Standalone key");
+            return Error(400, "not a playable media key");
         }
 
         HttpResponseMessage? response = null;

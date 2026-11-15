@@ -65,7 +65,7 @@ public sealed class AdminController : ControllerBase
         var configuration = Plugin.Instance?.Configuration;
         if (configuration is null)
         {
-            return BadRequest(new { ok = false, message = "Standalone is not loaded." });
+            return BadRequest(new { ok = false, message = "The plugin is not loaded." });
         }
 
         var outcome = await _sync.RunAsync(configuration, cancellationToken).ConfigureAwait(false);

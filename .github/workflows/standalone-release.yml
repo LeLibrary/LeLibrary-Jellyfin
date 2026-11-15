@@ -3,7 +3,7 @@ name: Standalone release
 on:
   push:
     tags:
-      - 'standalone-v*'
+      - 'providers-v*'
 
 permissions:
   contents: write
@@ -36,6 +36,7 @@ jobs:
       - name: Publish release archives
         uses: softprops/action-gh-release@v2
         with:
+          name: LeLibrary provider plugins ${{ github.ref_name }}
           prerelease: false
           body_path: STANDALONE-RELEASE-NOTES.md
           files: artifacts/standalone-repo/*.zip

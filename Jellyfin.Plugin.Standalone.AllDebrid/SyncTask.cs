@@ -39,7 +39,7 @@ public sealed class SyncTask : IScheduledTask
     }
 
     /// <inheritdoc />
-    public string Name => "Standalone AllDebrid Sync";
+    public string Name => "LeLibrary AD Sync";
 
     /// <inheritdoc />
     public string Key => "StandaloneAllDebridSync";
@@ -48,7 +48,7 @@ public sealed class SyncTask : IScheduledTask
     public string Description => "Reads your AllDebrid account and updates the Jellyfin library.";
 
     /// <inheritdoc />
-    public string Category => "Standalone AllDebrid";
+    public string Category => "LeLibrary AD";
 
     /// <inheritdoc />
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
@@ -73,12 +73,12 @@ public sealed class SyncTask : IScheduledTask
         progress?.Report(100);
         if (!outcome.Ok)
         {
-            _logger.LogWarning("Standalone sync stopped without changes: {Error}", outcome.Error);
+            _logger.LogWarning("LeLibrary AD sync stopped without changes: {Error}", outcome.Error);
             return;
         }
 
         _logger.LogInformation(
-            "Standalone sync: {Added} added, {Updated} updated, {Removed} removed, {Unchanged} unchanged, {Skipped} skipped",
+            "LeLibrary AD sync: {Added} added, {Updated} updated, {Removed} removed, {Unchanged} unchanged, {Skipped} skipped",
             outcome.Result!.Added,
             outcome.Result.Updated,
             outcome.Result.Removed,

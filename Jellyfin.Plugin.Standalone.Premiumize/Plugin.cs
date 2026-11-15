@@ -36,7 +36,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public static Plugin? Instance { get; private set; }
 
     /// <inheritdoc />
-    public override string Name => "Standalone Premiumize";
+    public override string Name => "LeLibrary PM";
 
     /// <inheritdoc />
     public override Guid Id => PluginId;

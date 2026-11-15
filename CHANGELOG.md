@@ -1,6 +1,11 @@
 # Changelog
 
-## Standalone 0.0.1
+## Provider plugins 0.0.2
+
+- Renamed the provider plugins to LeLibrary TB, RD, AD and PM across the catalog and settings.
+- Retained existing plugin IDs, configuration files and library paths.
+
+## Provider plugins 0.0.1
 
 - Added separate plugins for TorBox, Real-Debrid, AllDebrid and
   Premiumize, each with its own provider settings and direct API client. These
@@ -31,4 +36,4 @@
   listing or the listing exceeds the pagination limit.
 
 This release is for the existing LeLibrary-connected plugin. The separate
-standalone provider plugins are still under development.
+provider plugins are still under development.

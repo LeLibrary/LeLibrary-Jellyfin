@@ -39,7 +39,7 @@ public sealed class SyncTask : IScheduledTask
     }
 
     /// <inheritdoc />
-    public string Name => "Standalone Premiumize Sync";
+    public string Name => "LeLibrary PM Sync";
 
     /// <inheritdoc />
     public string Key => "StandalonePremiumizeSync";
@@ -48,7 +48,7 @@ public sealed class SyncTask : IScheduledTask
     public string Description => "Reads your Premiumize account and updates the Jellyfin library.";
 
     /// <inheritdoc />
-    public string Category => "Standalone Premiumize";
+    public string Category => "LeLibrary PM";
 
     /// <inheritdoc />
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
@@ -73,12 +73,12 @@ public sealed class SyncTask : IScheduledTask
         progress?.Report(100);
         if (!outcome.Ok)
         {
-            _logger.LogWarning("Standalone sync stopped without changes: {Error}", outcome.Error);
+            _logger.LogWarning("LeLibrary PM sync stopped without changes: {Error}", outcome.Error);
             return;
         }
 
         _logger.LogInformation(
-            "Standalone sync: {Added} added, {Updated} updated, {Removed} removed, {Unchanged} unchanged, {Skipped} skipped",
+            "LeLibrary PM sync: {Added} added, {Updated} updated, {Removed} removed, {Unchanged} unchanged, {Skipped} skipped",
             outcome.Result!.Added,
             outcome.Result.Updated,
             outcome.Result.Removed,
