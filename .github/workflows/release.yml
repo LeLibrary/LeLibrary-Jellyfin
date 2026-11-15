@@ -36,6 +36,22 @@ jobs:
             PAGES_BASE=${{ steps.pages.outputs.base_url }} \
             DOTNET=dotnet bash scripts/local-repo.sh
 
+      - name: Preserve other plugin entries
+        run: |
+          curl --fail --silent --show-error --location --retry 3 https://lelibrary.github.io/LeLibrary-Jellyfin/manifest.json -o /tmp/lelibrary-current-manifest.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('artifacts/repo/manifest.json')
+          new = json.loads(path.read_text())
+          old = json.loads(Path('/tmp/lelibrary-current-manifest.json').read_text())
+          if not isinstance(new, list) or not isinstance(old, list) or not new:
+              raise SystemExit('Invalid repository manifest')
+          ids = {entry['guid'].lower() for entry in new}
+          new.extend(entry for entry in old if entry.get('guid', '').lower() not in ids)
+          path.write_text(json.dumps(new, indent=2) + '\n')
+          PY
+
       - name: Prepare release notes
         if: startsWith(github.ref, 'refs/tags/')
         run: |

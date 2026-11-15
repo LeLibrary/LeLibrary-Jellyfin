@@ -56,4 +56,18 @@ public class LocalPlanBuilderTests
         Assert.Equal(3, episode.IndexNumber);
         Assert.Equal(4, episode.IndexNumberEnd);
     }
+
+    [Theory]
+    [InlineData("Example.Show.S01E01.mkv", "Example Show Season 1", 1, 1)]
+    [InlineData("Example.Show.S02E03-E04.mkv", "Example Show Season 2", 2, 3)]
+    public void ClassifiesEpisodeFilesFromSeasonPacks(string file, string release, int season, int number)
+    {
+        var builder = new LocalPlanBuilder(ParseName);
+        var (plan, skipped) = builder.Build("torbox", new[] { new DebridFile("torbox:1:2", file, 123, release) });
+        var episode = Assert.Single(plan.Items);
+        Assert.Equal("episode", episode.Kind);
+        Assert.Equal(season, episode.Season);
+        Assert.Equal(number, episode.Episode);
+        Assert.Equal(0, skipped);
+    }
 }

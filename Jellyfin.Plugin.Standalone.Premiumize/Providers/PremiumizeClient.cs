@@ -39,6 +39,17 @@ public sealed class PremiumizeClient : IDebridClient
         return !string.IsNullOrWhiteSpace(value);
     }
     private static bool Success(JsonElement element) => Text(element, "status", out var status) && status == "success";
+    // Premiumize can return an error envelope with HTTP 200.
+    private static ProviderHealth ErrorHealth(JsonElement element)
+    {
+        if (!Text(element, "code", out var code)) return ProviderHealth.Unavailable;
+        return code switch
+        {
+            "authentication_failed" or "permission_denied" => ProviderHealth.InvalidKey,
+            "rate_limit_reached" => ProviderHealth.RateLimited,
+            _ => ProviderHealth.Unavailable,
+        };
+    }
     private static ProviderListing Failed(ProviderHealth health) => new(health, Array.Empty<DebridFile>(), "Premiumize did not return a complete listing");
 
     /// <inheritdoc />
@@ -49,7 +60,7 @@ public sealed class PremiumizeClient : IDebridClient
             using var response = await GetAsync("account/info", cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode) return Status(response.StatusCode);
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
-            return Success(json.RootElement) ? ProviderHealth.Healthy : ProviderHealth.Unavailable;
+            return Success(json.RootElement) ? ProviderHealth.Healthy : ErrorHealth(json.RootElement);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException) { return ProviderHealth.Unavailable; }
     }
@@ -62,7 +73,8 @@ public sealed class PremiumizeClient : IDebridClient
             if (!response.IsSuccessStatusCode) return Failed(Status(response.StatusCode));
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
             var root = json.RootElement;
-            if (!Success(root) || !root.TryGetProperty("files", out var array) || array.ValueKind != JsonValueKind.Array) return Failed(ProviderHealth.Unavailable);
+            if (!Success(root)) return Failed(ErrorHealth(root));
+            if (!root.TryGetProperty("files", out var array) || array.ValueKind != JsonValueKind.Array) return Failed(ProviderHealth.Unavailable);
             var files = new List<DebridFile>();
             var seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (var file in array.EnumerateArray())
@@ -88,6 +100,8 @@ public sealed class PremiumizeClient : IDebridClient
             if (response.StatusCode == HttpStatusCode.NotFound) return MintResult.Fail(MintStatus.NotFound);
             if (!response.IsSuccessStatusCode) return MintResult.Fail(MintStatus.Error);
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
+            if (!Success(json.RootElement) && Text(json.RootElement, "code", out var error) && error == "not_found")
+                return MintResult.Fail(MintStatus.NotFound);
             return Success(json.RootElement) && Text(json.RootElement, "link", out var url) && Uri.TryCreate(url, UriKind.Absolute, out var uri)
                 && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
                 ? new MintResult(MintStatus.Ok, url) : MintResult.Fail(MintStatus.Error);

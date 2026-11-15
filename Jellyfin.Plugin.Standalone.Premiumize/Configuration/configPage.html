@@ -4,7 +4,7 @@
     <title>Standalone Premiumize</title>
 </head>
 <body>
-<div id="StandaloneConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select">
+<div id="StandalonePremiumizeConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select">
     <div data-role="content">
         <div class="content-primary">
             <form class="StandaloneConfigForm">
@@ -58,6 +58,7 @@
                     </button>
                     <span id="actionStatus" role="status"></span>
                 </div>
+                <p class="fieldDescription">Save your settings before testing the key or starting a sync.</p>
             </form>
         </div>
     </div>
@@ -65,7 +66,7 @@
     <script type="text/javascript">
         (function () {
             var pluginId = 'd0c65588-3905-487d-989b-d0d6b601b01d';
-            var page = document.querySelector('#StandaloneConfigPage');
+            var page = document.querySelector('#StandalonePremiumizeConfigPage');
             var form = page.querySelector('.StandaloneConfigForm');
 
             function load() {

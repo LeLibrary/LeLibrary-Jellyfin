@@ -14,6 +14,23 @@ public sealed class AllDebridClientTests
     private static HttpResponseMessage Json(string body) => new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
     private static AllDebridClient Client(Func<HttpRequestMessage, HttpResponseMessage> respond) => new(new HttpClient(new Handler(respond)) { BaseAddress = new Uri("https://example.test/") }, "key");
     [Fact]
+    public async Task AuthenticationProbeUsesDocumentedGetUserEndpoint()
+    {
+        var client = Client(r => r.Method == HttpMethod.Get && r.RequestUri!.AbsolutePath == "/v4/user"
+            ? Json("""{"status":"success","data":{"user":{"username":"test"}}}""")
+            : new HttpResponseMessage(HttpStatusCode.MethodNotAllowed));
+        Assert.Equal(ProviderHealth.Healthy, await client.ProbeAsync(CancellationToken.None));
+    }
+    [Fact]
+    public async Task HttpOkBadApiKeyIsRejectedForProbeAndListing()
+    {
+        var client = Client(_ => Json("""{"status":"error","error":{"code":"AUTH_BAD_APIKEY","message":"invalid"}}"""));
+        Assert.Equal(ProviderHealth.InvalidKey, await client.ProbeAsync(CancellationToken.None));
+        var listing = await client.ListLibraryAsync(CancellationToken.None);
+        Assert.Equal(ProviderHealth.InvalidKey, listing.Health);
+        Assert.Empty(listing.Files);
+    }
+    [Fact]
     public async Task ReadsNestedFileAndUnlocksItsLink()
     {
         var client = Client(r => r.RequestUri!.AbsolutePath.EndsWith("status")

@@ -10,9 +10,7 @@ using System.Threading.Tasks;
 namespace Jellyfin.Plugin.Standalone.TorBox.Providers;
 
 /// <summary>
-/// TorBox: torrents only. Usenet and web downloads number their items in the
-/// same namespace as torrents, so they are a separate family and not part of a
-/// torrent plan.
+/// Reads TorBox torrent, web and Usenet downloads as distinct source families.
 /// </summary>
 public sealed class TorboxClient : IDebridClient
 {
@@ -21,14 +19,18 @@ public sealed class TorboxClient : IDebridClient
 
     private readonly HttpClient _http;
     private readonly string _apiKey;
+    private readonly bool _includeWebDownloads;
+    private readonly bool _includeUsenet;
 
     /// <summary>Initializes a new instance of the <see cref="TorboxClient"/> class.</summary>
     /// <param name="http">The HTTP client (base address https://api.torbox.app/).</param>
     /// <param name="apiKey">The user's own TorBox key.</param>
-    public TorboxClient(HttpClient http, string apiKey)
+    public TorboxClient(HttpClient http, string apiKey, bool includeWebDownloads = false, bool includeUsenet = false)
     {
         _http = http;
         _apiKey = apiKey;
+        _includeWebDownloads = includeWebDownloads;
+        _includeUsenet = includeUsenet;
     }
 
     /// <inheritdoc />
@@ -60,12 +62,17 @@ public sealed class TorboxClient : IDebridClient
     public async Task<ProviderListing> ListLibraryAsync(CancellationToken cancellationToken)
     {
         var files = new List<DebridFile>();
+        var families = new List<(string Path, string Prefix)> { ("torrents", "") };
+        if (_includeWebDownloads) families.Add(("webdl", "W"));
+        if (_includeUsenet) families.Add(("usenet", "U"));
+        foreach (var family in families)
+        {
         var seen = new HashSet<long>();
         for (var offset = 0; ; offset += PageSize)
         {
             using var request = new HttpRequestMessage(
                 HttpMethod.Get,
-                $"v1/api/torrents/mylist?bypass_cache=true&limit={PageSize}&offset={offset}");
+                $"v1/api/{family.Path}/mylist?bypass_cache=true&limit={PageSize}&offset={offset}");
             request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_apiKey}");
 
             HttpResponseMessage response;
@@ -99,7 +106,7 @@ public sealed class TorboxClient : IDebridClient
                 List<(long TorrentId, string? ReleaseName, List<(long? Id, string? Name, long Size)> Files)> page;
                 try
                 {
-                    page = ReadTorrents(body);
+                    page = ReadTorrents(body, family.Path != "torrents");
                 }
                 catch (JsonException)
                 {
@@ -118,7 +125,7 @@ public sealed class TorboxClient : IDebridClient
                     {
                         if (file.Id is null) continue;
                         files.Add(new DebridFile(
-                            $"{Provider}:{torrentId}:{file.Id.Value}",
+                            $"{Provider}:{family.Prefix}{torrentId}:{file.Id.Value}",
                             file.Name ?? string.Empty,
                             file.Size,
                             releaseName));
@@ -136,6 +143,7 @@ public sealed class TorboxClient : IDebridClient
             }
         }
 
+        }
         return new ProviderListing(ProviderHealth.Healthy, files, null);
     }
 
@@ -147,8 +155,13 @@ public sealed class TorboxClient : IDebridClient
             return MintResult.Fail(MintStatus.NotFound);
         }
 
-        var url = $"v1/api/torrents/requestdl?token={Uri.EscapeDataString(_apiKey)}"
-            + $"&torrent_id={Uri.EscapeDataString(parsed.ItemId)}"
+        var family = parsed.ItemId.StartsWith("W", StringComparison.Ordinal) ? "webdl"
+            : parsed.ItemId.StartsWith("U", StringComparison.Ordinal) ? "usenet" : "torrents";
+        var itemId = family == "torrents" ? parsed.ItemId : parsed.ItemId[1..];
+        if (!long.TryParse(itemId, NumberStyles.None, CultureInfo.InvariantCulture, out _)) return MintResult.Fail(MintStatus.NotFound);
+        var idParameter = family == "webdl" ? "web_id" : family == "usenet" ? "usenet_id" : "torrent_id";
+        var url = $"v1/api/{family}/requestdl?token={Uri.EscapeDataString(_apiKey)}"
+            + $"&{idParameter}={Uri.EscapeDataString(itemId)}"
             + $"&file_id={Uri.EscapeDataString(parsed.FileId)}"
             + "&zip_link=false";
 
@@ -227,7 +240,7 @@ public sealed class TorboxClient : IDebridClient
         }
     }
 
-    private static List<(long TorrentId, string? ReleaseName, List<(long? Id, string? Name, long Size)> Files)> ReadTorrents(string body)
+    private static List<(long TorrentId, string? ReleaseName, List<(long? Id, string? Name, long Size)> Files)> ReadTorrents(string body, bool requirePresent)
     {
         var result = new List<(long, string?, List<(long?, string?, long)>)>();
         using var document = JsonDocument.Parse(body);
@@ -251,6 +264,29 @@ public sealed class TorboxClient : IDebridClient
             }
 
             var files = new List<(long?, string?, long)>();
+            if (requirePresent)
+            {
+                if (!torrent.TryGetProperty("download_present", out var available)
+                    || available.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                    throw new JsonException("TorBox returned a download without its availability");
+                if (available.ValueKind == JsonValueKind.False)
+                {
+                    result.Add((torrentId, null, files));
+                    continue;
+                }
+            }
+            // TorBox can return files: null while a download is still being
+            // checked or finalized. Keep its id in the pagination snapshot,
+            // but do not expose an unplayable item or fail the whole account.
+            if (torrent.TryGetProperty("download_present", out var present)
+                && present.ValueKind == JsonValueKind.False
+                && torrent.TryGetProperty("download_state", out var state)
+                && state.ValueKind == JsonValueKind.String
+                && IsPendingState(state.GetString()))
+            {
+                result.Add((torrentId, null, files));
+                continue;
+            }
             if (!torrent.TryGetProperty("files", out var fileArray) || fileArray.ValueKind != JsonValueKind.Array)
             {
                 throw new JsonException("TorBox returned a torrent without its files");
@@ -287,6 +323,11 @@ public sealed class TorboxClient : IDebridClient
 
         return result;
     }
+
+    private static bool IsPendingState(string? value)
+        => value?.Trim().ToLowerInvariant() is "checking" or "checkingresumedata" or "downloading"
+            or "metadl" or "processing" or "uploading" or "uploading (no peers)"
+            or "stalled" or "stalled (no seeds)" or "stalleddl" or "paused";
 
     private static bool TryLong(JsonElement element, out long value)
     {

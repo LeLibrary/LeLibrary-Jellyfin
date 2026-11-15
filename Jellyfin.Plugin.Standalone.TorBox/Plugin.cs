@@ -52,7 +52,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         {
             new PluginPageInfo
             {
-                Name = "configPage",
+                Name = "StandaloneTorBoxConfig",
                 EmbeddedResourcePath = $"{GetType().Namespace}.Configuration.configPage.html",
             },
         };

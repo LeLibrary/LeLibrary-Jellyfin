@@ -4,7 +4,7 @@
     <title>Standalone AllDebrid</title>
 </head>
 <body>
-<div id="StandaloneConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select">
+<div id="StandaloneAllDebridConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select">
     <div data-role="content">
         <div class="content-primary">
             <form class="StandaloneConfigForm">
@@ -58,6 +58,7 @@
                     </button>
                     <span id="actionStatus" role="status"></span>
                 </div>
+                <p class="fieldDescription">Save your settings before testing the key or starting a sync.</p>
             </form>
         </div>
     </div>
@@ -65,7 +66,7 @@
     <script type="text/javascript">
         (function () {
             var pluginId = '7aa38d7a-bd3f-4b1d-81be-49f9cc1bf09d';
-            var page = document.querySelector('#StandaloneConfigPage');
+            var page = document.querySelector('#StandaloneAllDebridConfigPage');
             var form = page.querySelector('.StandaloneConfigForm');
 
             function load() {

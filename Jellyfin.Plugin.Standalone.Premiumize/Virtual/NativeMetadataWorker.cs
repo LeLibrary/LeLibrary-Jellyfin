@@ -20,6 +20,7 @@ public sealed class NativeMetadataWorker : IDisposable
 {
     private readonly Channel<Guid> _pending = Channel.CreateUnbounded<Guid>(new UnboundedChannelOptions { SingleReader = true });
     private readonly HashSet<Guid> _ids = new();
+    private readonly HashSet<Guid> _retry = new();
     private readonly object _gate = new();
     private readonly CancellationTokenSource _stop = new();
     private readonly IProviderManager _providers;
@@ -28,6 +29,7 @@ public sealed class NativeMetadataWorker : IDisposable
     private readonly ILogger<NativeMetadataWorker> _log;
     private readonly string _path;
     private readonly Task _worker;
+    private readonly Task _retryWorker;
 
     /// <summary>Initializes a new instance of the <see cref="NativeMetadataWorker"/> class.</summary>
     public NativeMetadataWorker(IProviderManager providers, ILibraryManager library, IFileSystem fileSystem, IApplicationPaths paths, ILogger<NativeMetadataWorker> log)
@@ -45,6 +47,7 @@ public sealed class NativeMetadataWorker : IDisposable
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
         { _log.LogWarning(error, "Could not restore the metadata queue"); }
         _worker = Task.Run(ProcessAsync);
+        _retryWorker = Task.Run(RetryAsync);
     }
 
     /// <summary>Persists and schedules items for native Jellyfin identification.</summary>
@@ -90,21 +93,56 @@ public sealed class NativeMetadataWorker : IDisposable
                     {
                         var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
                         {
-                            MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                            // Jellyfin's normal first refresh replaces placeholder names
+                            // while respecting locked fields. Later retries preserve edits.
+                            MetadataRefreshMode = SelectMetadataMode(item.DateLastRefreshed),
                             ImageRefreshMode = MetadataRefreshMode.FullRefresh,
                             ReplaceAllImages = false,
                             ReplaceAllMetadata = false,
                         };
+                        // Jellyfin can report individual provider failures without
+                        // throwing. It advances this stamp only after a complete
+                        // metadata and image refresh.
+                        var previousRefresh = item.DateLastRefreshed;
                         await _providers.RefreshSingleItem(item, options, _stop.Token).ConfigureAwait(false);
+                        complete = item.DateLastRefreshed != previousRefresh;
+                        if (!complete) _log.LogWarning("Metadata refresh was incomplete for {Id}; it will be retried", id);
                     }
-                    complete = true;
+                    else
+                    {
+                        // The item was removed while it was waiting in the queue.
+                        complete = true;
+                    }
                 }
                 catch (OperationCanceledException) when (_stop.IsCancellationRequested) { return; }
-                catch (Exception error) { _log.LogWarning(error, "Metadata refresh failed for {Id}; it will be retried after restart", id); }
+                catch (Exception error) { _log.LogWarning(error, "Metadata refresh failed for {Id}; it will be retried", id); }
                 lock (_gate)
                 {
-                    if (complete) _ids.Remove(id);
+                    if (complete) { _ids.Remove(id); _retry.Remove(id); }
+                    else _retry.Add(id);
                     if (++sinceSave >= 32 || !_pending.Reader.TryPeek(out _)) { Save(); sinceSave = 0; }
+                }
+            }
+        }
+        catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
+    }
+
+    private static MetadataRefreshMode SelectMetadataMode(DateTime lastRefreshed)
+        => lastRefreshed == DateTime.MinValue ? MetadataRefreshMode.Default : MetadataRefreshMode.FullRefresh;
+
+    // Retry failed refreshes without blocking newly added items or creating a
+    // timer per item. The pending snapshot also survives a server restart.
+    private async Task RetryAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(2));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_stop.Token).ConfigureAwait(false))
+            {
+                lock (_gate)
+                {
+                    foreach (var id in _retry) _pending.Writer.TryWrite(id);
+                    _retry.Clear();
                 }
             }
         }
@@ -117,5 +155,6 @@ public sealed class NativeMetadataWorker : IDisposable
         _pending.Writer.TryComplete(); _stop.Cancel();
         lock (_gate) Save();
         _ = _worker;
+        _ = _retryWorker;
     }
 }

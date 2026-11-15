@@ -40,4 +40,25 @@ public sealed class PremiumizeClientTests
         Assert.False(listing.IsHealthy);
         Assert.Empty(listing.Files);
     }
+
+    [Theory]
+    [InlineData("authentication_failed", ProviderHealth.InvalidKey)]
+    [InlineData("permission_denied", ProviderHealth.InvalidKey)]
+    [InlineData("rate_limit_reached", ProviderHealth.RateLimited)]
+    [InlineData("transient_error", ProviderHealth.Unavailable)]
+    public async Task HttpOkErrorEnvelopesAreNotSuccessfulListings(string code, ProviderHealth expected)
+    {
+        var client = Client(_ => Json($$"""{"status":"error","code":"{{code}}","files":[]}"""));
+        Assert.Equal(expected, await client.ProbeAsync(CancellationToken.None));
+        var listing = await client.ListLibraryAsync(CancellationToken.None);
+        Assert.Equal(expected, listing.Health);
+        Assert.False(listing.IsHealthy);
+    }
+
+    [Fact]
+    public async Task ItemNotFoundEnvelopeReturnsNotFound()
+    {
+        var client = Client(_ => Json("""{"status":"error","code":"not_found"}"""));
+        Assert.Equal(MintStatus.NotFound, (await client.MintAsync("premiumize:616263:0", CancellationToken.None)).Status);
+    }
 }

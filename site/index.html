@@ -3,24 +3,24 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>LeLibrary for Jellyfin</title>
-<meta name="description" content="The LeLibrary for Jellyfin page lives on lelibrary.uk." />
-<link rel="canonical" href="https://lelibrary.uk/jellyfin" />
-<meta http-equiv="refresh" content="0; url=https://lelibrary.uk/jellyfin" />
+<title>Standalone debrid plugins for Jellyfin</title>
 <style>
-  body { margin: 0; background: #0d0f14; color: #e8ecf4;
-         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-         display: grid; place-items: center; min-height: 100vh; }
-  a { color: #f5b32c; }
-  .box { text-align: center; padding: 24px; }
-  img { width: 48px; height: 48px; border-radius: 10px; }
+  body { margin: 0; background: #0d0f14; color: #e8ecf4; font: 16px/1.6 system-ui, sans-serif; }
+  main { max-width: 48rem; margin: 4rem auto; padding: 0 1.5rem; }
+  a { color: #f5b32c; } code { overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
-  <div class="box">
-    <img src="thumb.png" alt="" />
-    <p>The LeLibrary for Jellyfin page is at<br /><a href="https://lelibrary.uk/jellyfin">lelibrary.uk/jellyfin</a></p>
-    <p style="color:#9aa4b5;font-size:14px">This address only serves the plugin repository. Add it in Jellyfin under Plugins, Repositories.</p>
-  </div>
+<main>
+  <h1>Standalone debrid plugins for Jellyfin</h1>
+  <p>Connect Jellyfin directly to TorBox, Real-Debrid, AllDebrid or Premiumize.
+  Jellyfin handles metadata and artwork. The standalone plugins do not require a LeLibrary account or setup token.</p>
+  <p>In Jellyfin, add this repository under Dashboard → Plugins → Repositories:</p>
+  <p><code>https://lelibrary.github.io/LeLibrary-Jellyfin/manifest.json</code></p>
+  <p>Install the standalone plugin for your provider, restart Jellyfin, enter your provider key in its settings and save before testing or syncing.</p>
+  <p>Standalone plugins require Jellyfin 12.4 or newer. Live provider account testing, automatic removal and migration from the legacy plugin are not yet complete.</p>
+  <p>The separate legacy LeLibrary plugin remains available for existing users and still requires a LeLibrary setup.</p>
+  <p><a href="https://github.com/LeLibrary/LeLibrary-Jellyfin">Source code and documentation</a></p>
+</main>
 </body>
 </html>

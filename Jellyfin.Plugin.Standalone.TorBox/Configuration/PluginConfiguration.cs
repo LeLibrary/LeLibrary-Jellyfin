@@ -21,6 +21,12 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public string DebridApiKey { get; set; } = string.Empty;
 
+    /// <summary>Gets or sets whether to include TorBox web downloads.</summary>
+    public bool IncludeWebDownloads { get; set; }
+
+    /// <summary>Gets or sets whether to include TorBox Usenet downloads.</summary>
+    public bool IncludeUsenet { get; set; }
+
     /// <summary>
     /// Gets or sets the URL players should use for this server. Empty means the
     /// address Jellyfin reports for itself, which in Docker is the container's

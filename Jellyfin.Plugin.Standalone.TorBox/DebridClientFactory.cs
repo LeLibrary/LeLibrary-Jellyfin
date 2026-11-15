@@ -39,7 +39,7 @@ public sealed class DebridClientFactory : IDisposable
         // TorBox: the user would be talking to the wrong account.
         if (string.Equals(configuration.Provider, "torbox", StringComparison.OrdinalIgnoreCase))
         {
-            return new TorboxClient(_api, configuration.DebridApiKey ?? string.Empty);
+            return new TorboxClient(_api, configuration.DebridApiKey ?? string.Empty, configuration.IncludeWebDownloads, configuration.IncludeUsenet);
         }
 
         _log?.LogWarning("Standalone: {Provider} is not supported yet", ProviderName(configuration.Provider));

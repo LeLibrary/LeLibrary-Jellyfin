@@ -1,0 +1,54 @@
+name: Standalone release
+
+on:
+  push:
+    tags:
+      - 'standalone-v*'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: Test and package standalone plugins
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Test
+        run: dotnet test -c Release --nologo
+      - name: Preserve the existing repository and build the standalone packages
+        env:
+          STANDALONE_REPO_RELEASE: '1'
+          STANDALONE_REPO_BASE: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
+          STANDALONE_EXISTING_MANIFEST: /tmp/lelibrary-current-manifest.json
+        run: |
+          curl --fail --silent --show-error --location --retry 3 https://lelibrary.github.io/LeLibrary-Jellyfin/manifest.json -o "$STANDALONE_EXISTING_MANIFEST"
+          scripts/standalone-repo.sh
+          cp site/*.html artifacts/standalone-repo/
+          cp Jellyfin.Plugin.LeLibrary/thumb.png artifacts/standalone-repo/thumb.png
+          touch artifacts/standalone-repo/.nojekyll
+      - name: Publish release archives
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          body_path: STANDALONE-RELEASE-NOTES.md
+          files: artifacts/standalone-repo/*.zip
+      - name: Upload repository
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: artifacts/standalone-repo
+  pages:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

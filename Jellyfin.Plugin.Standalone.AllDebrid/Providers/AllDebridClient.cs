@@ -23,15 +23,18 @@ public sealed class AllDebridClient : IDebridClient
     /// <inheritdoc />
     public string Provider => "alldebrid";
 
-    private async Task<HttpResponseMessage> Post(string path, IEnumerable<KeyValuePair<string, string>> values, CancellationToken token)
+    private async Task<HttpResponseMessage> Send(HttpMethod method, string path, IEnumerable<KeyValuePair<string, string>>? values, CancellationToken token)
     {
         await Gate.WaitAsync(token).ConfigureAwait(false);
         try { var wait = _next - Environment.TickCount64; if (wait > 0) await Task.Delay((int)wait, token).ConfigureAwait(false); _next = Environment.TickCount64 + 250; }
         finally { Gate.Release(); }
-        using var req = new HttpRequestMessage(HttpMethod.Post, path) { Content = new FormUrlEncodedContent(values) };
+        using var req = new HttpRequestMessage(method, path);
+        if (values is not null) req.Content = new FormUrlEncodedContent(values);
         req.Headers.TryAddWithoutValidation("Authorization", "Bearer " + _key);
         return await _http.SendAsync(req, token).ConfigureAwait(false);
     }
+    private Task<HttpResponseMessage> Post(string path, IEnumerable<KeyValuePair<string, string>> values, CancellationToken token)
+        => Send(HttpMethod.Post, path, values, token);
     private static readonly KeyValuePair<string, string>[] Empty = Array.Empty<KeyValuePair<string, string>>();
     private static ProviderHealth Health(HttpStatusCode status) => status switch { HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => ProviderHealth.InvalidKey, HttpStatusCode.TooManyRequests => ProviderHealth.RateLimited, _ => ProviderHealth.Unavailable };
     private static ProviderListing Failed(ProviderHealth health) => new(health, Array.Empty<DebridFile>(), "AllDebrid did not return a complete listing");
@@ -50,15 +53,23 @@ public sealed class AllDebridClient : IDebridClient
     {
         data = default; return String(root, "status", out var status) && status == "success" && root.TryGetProperty("data", out data) && data.ValueKind == JsonValueKind.Object;
     }
+    private static ProviderHealth ErrorHealth(JsonElement root)
+    {
+        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("error", out var error)
+            && String(error, "code", out var code) && code is "AUTH_BAD_APIKEY" or "AUTH_MISSING_APIKEY")
+            return ProviderHealth.InvalidKey;
+        return ProviderHealth.Unavailable;
+    }
     /// <inheritdoc />
     public async Task<ProviderHealth> ProbeAsync(CancellationToken cancellationToken)
     {
         try
         {
-            using var response = await Post("v4/user", Empty, cancellationToken).ConfigureAwait(false);
+            using var response = await Send(HttpMethod.Get, "v4/user", null, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode) return Health(response.StatusCode);
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
-            return Data(json.RootElement, out _) ? ProviderHealth.Healthy : ProviderHealth.Unavailable;
+            return Data(json.RootElement, out var data) && data.TryGetProperty("user", out var user) && user.ValueKind == JsonValueKind.Object
+                ? ProviderHealth.Healthy : ErrorHealth(json.RootElement);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException) { return ProviderHealth.Unavailable; }
     }
@@ -70,7 +81,8 @@ public sealed class AllDebridClient : IDebridClient
             using var response = await Post("v4.1/magnet/status", Empty, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode) return Failed(Health(response.StatusCode));
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
-            if (!Data(json.RootElement, out var data) || !data.TryGetProperty("magnets", out var magnets) || magnets.ValueKind != JsonValueKind.Array) return Failed(ProviderHealth.Unavailable);
+            if (!Data(json.RootElement, out var data)) return Failed(ErrorHealth(json.RootElement));
+            if (!data.TryGetProperty("magnets", out var magnets) || magnets.ValueKind != JsonValueKind.Array) return Failed(ProviderHealth.Unavailable);
             var ready = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var magnet in magnets.EnumerateArray())
             {
@@ -84,7 +96,8 @@ public sealed class AllDebridClient : IDebridClient
                 using var part = await Post("v4/magnet/files", batch.Select(id => new KeyValuePair<string, string>("id[]", id)), cancellationToken).ConfigureAwait(false);
                 if (!part.IsSuccessStatusCode) return Failed(Health(part.StatusCode));
                 using var detail = JsonDocument.Parse(await part.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
-                if (!Data(detail.RootElement, out var details) || !details.TryGetProperty("magnets", out var rows) || rows.ValueKind != JsonValueKind.Array) return Failed(ProviderHealth.Unavailable);
+                if (!Data(detail.RootElement, out var details)) return Failed(ErrorHealth(detail.RootElement));
+                if (!details.TryGetProperty("magnets", out var rows) || rows.ValueKind != JsonValueKind.Array) return Failed(ProviderHealth.Unavailable);
                 var seen = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var row in rows.EnumerateArray())
                 {

@@ -86,9 +86,15 @@ public sealed class PlaybackProxy
             }
             if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable) break;
             var status = (int)response.StatusCode;
+            var expired = false;
+            if (status == 400)
+            {
+                try { expired = await IsExpiredTorboxLinkAsync(response, cancellationToken).ConfigureAwait(false); }
+                catch (Exception error) when (error is IOException or HttpRequestException) { }
+            }
             response.Dispose();
             response = null;
-            if (status is 401 or 403 or 404)
+            if (status is 401 or 403 or 404 || expired)
             {
                 _links.Forget(key!);
                 if (attempt == 0) continue;
@@ -110,6 +116,24 @@ public sealed class PlaybackProxy
 
     private static ProxyResponse Error(int status, string message)
         => new(status, null, null, null, null, null, message);
+
+    private static async Task<bool> IsExpiredTorboxLinkAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        // TorBox can report a stale delivery URL as HTTP 400. Only remint for
+        // the specific expiry response; other 400 errors are not evidence of it.
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        var buffer = new byte[8192];
+        var length = 0;
+        while (length < buffer.Length)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(length), cancellationToken).ConfigureAwait(false);
+            if (read == 0) break;
+            length += read;
+        }
+        var body = System.Text.Encoding.UTF8.GetString(buffer, 0, length);
+        return body.Contains("Invalid Presigned Token", StringComparison.OrdinalIgnoreCase)
+            && body.Contains("Please get a new download link from TorBox", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static string DisplayName(string provider) => provider switch
     {

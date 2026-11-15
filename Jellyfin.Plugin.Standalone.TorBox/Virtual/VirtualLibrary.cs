@@ -43,7 +43,7 @@ public sealed class VirtualLibrary
     /// <summary>Suffix for the series library, after the provider name.</summary>
     public const string SeriesSuffix = " Series";
 
-    private const string AnchorFile = ".lelibrary";
+    private const string AnchorFile = ".standalone-debrid";
 
     private readonly NativeMetadataWorker _metadataWorker;
     private readonly ILibraryManager _library;
@@ -99,6 +99,14 @@ public sealed class VirtualLibrary
             existing = _library.GetVirtualFolders().Find(folder => string.Equals(folder.Name, name, StringComparison.OrdinalIgnoreCase));
         }
 
+        // A matching name alone does not make an existing user library ours.
+        // Refuse mixed or unrelated paths instead of writing into that library.
+        if (existing is not null && !IsOwnedLibrary(existing, path, collectionType))
+        {
+            _log.LogError("Standalone: {Name} already exists with a different type or location; refusing to modify it", name);
+            return null;
+        }
+
         if (existing?.ItemId is null)
         {
             _log.LogError("Standalone: could not create the {Name} library", name);
@@ -125,6 +133,12 @@ public sealed class VirtualLibrary
 
         return _library.GetItemById(physicalId) as Folder;
     }
+
+    private static bool IsOwnedLibrary(VirtualFolderInfo existing, string path, CollectionTypeOptions collectionType)
+        => existing.CollectionType == collectionType && existing.Locations is { Length: 1 }
+            && string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(existing.Locations[0])),
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)),
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     /// <summary>Applies the desired library: creates, updates and removes items.</summary>
     /// <param name="desired">What the plan wants.</param>

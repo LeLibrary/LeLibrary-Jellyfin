@@ -121,6 +121,58 @@ public class TorboxClientTests
         Assert.Equal(ProviderHealth.Unavailable, listing.Health);
     }
 
+    [Fact]
+    public async Task PendingTorrentWithoutFilesDoesNotBlockOtherCompletedItems()
+    {
+        var handler = new StubHandler()
+            .Json(r => r.RequestUri!.Query.Contains("offset=0"),
+                """{"success":true,"data":[{"id":1,"download_state":"checking","download_present":false,"files":null},{"id":2,"files":[{"id":3,"name":"Movie.mkv","size":123}]}]}""")
+            .Json(_ => true, """{"success":true,"data":[]}""");
+        var listing = await Client(handler).ListLibraryAsync(CancellationToken.None);
+        Assert.True(listing.IsHealthy);
+        Assert.Equal("torbox:2:3", Assert.Single(listing.Files).Key);
+    }
+
+    [Fact]
+    public async Task SelectedFamiliesUseDistinctKeysEvenWhenIdsOverlap()
+    {
+        var handler = new StubHandler()
+            .Json(r => r.RequestUri!.Query.Contains("offset=0") && r.RequestUri.AbsolutePath.Contains("/torrents/"), Page(1, (2, "Movie.mkv", 123)))
+            .Json(r => r.RequestUri!.Query.Contains("offset=0") && r.RequestUri.AbsolutePath.Contains("/webdl/"),
+                """{"success":true,"data":[{"id":1,"download_present":true,"files":[{"id":2,"name":"Web.mkv","size":123}]}]}""")
+            .Json(r => r.RequestUri!.Query.Contains("offset=0") && r.RequestUri.AbsolutePath.Contains("/usenet/"),
+                """{"success":true,"data":[{"id":1,"download_present":true,"files":[{"id":2,"name":"News.mkv","size":123}]}]}""")
+            .Json(_ => true, """{"success":true,"data":[]}""");
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://example.test/") };
+        var listing = await new TorboxClient(http, "test", true, true).ListLibraryAsync(CancellationToken.None);
+        Assert.True(listing.IsHealthy);
+        Assert.Equal(new[] { "torbox:1:2", "torbox:W1:2", "torbox:U1:2" }, listing.Files.Select(f => f.Key));
+    }
+
+    [Theory]
+    [InlineData("torbox:W123:2", "/webdl/requestdl", "web_id=123")]
+    [InlineData("torbox:U123:2", "/usenet/requestdl", "usenet_id=123")]
+    public async Task AdditionalFamilyFilesUseTheirOwnPlaybackEndpoint(string key, string endpoint, string parameter)
+    {
+        var handler = new StubHandler().Json(_ => true, """{"success":true,"data":"https://cdn.example/file"}""");
+        var result = await Client(handler).MintAsync(key, CancellationToken.None);
+        Assert.Equal(MintStatus.Ok, result.Status);
+        Assert.Contains(handler.Calls, call => call.Contains(endpoint) && call.Contains(parameter));
+    }
+
+    [Fact]
+    public async Task SelectedFamilyFailureDoesNotReturnPartialListingAsComplete()
+    {
+        var handler = new StubHandler()
+            .Json(r => r.RequestUri!.AbsolutePath.Contains("/webdl/"), "{}", HttpStatusCode.BadGateway)
+            .Json(r => r.RequestUri!.Query.Contains("offset=0"), Page(1, (2, "Movie.mkv", 123)))
+            .Json(_ => true, """{"success":true,"data":[]}""");
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://example.test/") };
+        var listing = await new TorboxClient(http, "test", true).ListLibraryAsync(CancellationToken.None);
+        Assert.False(listing.IsHealthy);
+        Assert.Empty(listing.Files);
+    }
+
     [Theory]
     [InlineData("{}")]
     [InlineData("{\"success\":false,\"data\":[]}")]

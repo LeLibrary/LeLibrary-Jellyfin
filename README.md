@@ -1,112 +1,48 @@
-# LeLibrary for Jellyfin
+# Standalone debrid plugins for Jellyfin
 
-Turn your debrid account into a normal Jellyfin library: movies, shows, seasons
-and episodes, named and matched the way LeLibrary names them.
+Four separately installable Jellyfin plugins connect directly to **TorBox**,
+**Real-Debrid**, **AllDebrid** or **Premiumize**. Each plugin reads its own
+provider account and streams through Jellyfin. Jellyfin's configured metadata
+providers identify the media and supply descriptions, posters and backdrops;
+the standalone plugins do not use a LeLibrary account, setup token, backend or
+metadata service.
 
-**Status: released (0.1.10).** The loop is verified end to end on a real library
-(36,000+ files, movies and episodes, Range playback through Jellyfin), and the
-metadata — overviews, genres, ratings, episode titles, artwork — is served by
-LeLibrary rather than Jellyfin's own TMDb and TVDB plugins.
+The standalone packages require **Jellyfin 12.4 or newer**. They have been
+exercised in DEV with mocked provider APIs; live provider accounts have not
+been tested. Synchronization currently adds and updates entries but does not
+remove old ones, and migration from the older LeLibrary-connected plugin has not
+been implemented.
 
-## Install
+## Install and configure
 
-1. **Add the plugin repository.** Jellyfin -> Dashboard -> Plugins ->
-   Repositories -> add this URL:
+1. Add the repository under **Dashboard → Plugins → Repositories**:
+   `https://lelibrary.github.io/LeLibrary-Jellyfin/manifest.json`.
+2. Install the standalone plugin for your provider from the catalog and restart
+   Jellyfin. Each plugin works without the others.
+3. Open that plugin's settings, enter your provider API key and save. In
+   Docker, set **Server URL** to an address accessible to your Jellyfin server
+   and players. For TorBox, enable web downloads or Usenet if your plan supports
+   them and you want those sources included.
+4. Test the key and start synchronization. Jellyfin's library settings and
+   metadata providers control identification and artwork.
 
-   ```
-   https://lelibrary.github.io/LeLibrary-Jellyfin/manifest.json
-   ```
+The separate legacy **LeLibrary** plugin remains in the repository for existing
+users. It still requires a LeLibrary setup and is not a standalone plugin. The
+standalone plugins create their own libraries and do not automatically migrate
+or delete existing libraries, watched data or provider files.
 
-2. **Install the plugin.** Plugins -> Catalog -> **LeLibrary** -> Install, then
-   restart Jellyfin. Jellyfin updates it from the same repository from then on.
+Jellyfin stores plugin settings as XML on disk. Protect the server's
+configuration directory, which contains the provider API key.
 
-3. **Copy your LeLibrary URL.** On your LeLibrary Setup page open the
-   **Jellyfin** card: it has the repository URL and your personal setup link.
-   Copy the setup link.
+## Development
 
-4. **Fill in the plugin settings.** Dashboard -> Plugins -> LeLibrary:
+Build and test with the .NET 10 SDK:
 
-   | Field | Value |
-   |---|---|
-   | Debrid provider | TorBox (Real-Debrid, AllDebrid and Premiumize follow) |
-   | Debrid API key | your own key |
-   | LeLibrary URL | the link from the Setup card |
-   | Server URL | the address players use, e.g. `http://192.168.1.20:8096` |
-   | Sync every | 6 hours (default) |
-
-   Press **Test key**, then **Run sync now**. The sync creates a **LeLibrary
-   Movies** and a **LeLibrary Shows** library itself and fills them - there is
-   no folder to pick and no library to add. Tens of thousands of titles appear
-   in one pass, in about two minutes.
-
-> **No release yet?** If the catalog shows nothing, the repository has no
-> tagged build. `scripts/local-repo.sh` builds the same zip and `manifest.json`
-> locally; add that folder as a repository instead.
-
-## How it works
-
-The plugin does not download or re-host anything, and LeLibrary never sees your
-debrid key or a byte of your playback:
-
-1. You paste your setup's LeLibrary URL and your **own** debrid API key into the
-   plugin settings.
-2. The plugin asks LeLibrary which titles belong in the library and what they
-   are called, then lists your debrid account itself.
-3. It creates the items **inside Jellyfin** - no files, no library scan. Each
-   item's play address is the plugin's own resolver, so playback always gets a
-   fresh link.
-4. When you press play, Jellyfin asks the plugin for a media source, the plugin
-   mints a fresh debrid link, and Jellyfin streams it. Links expire; a new one
-   is minted every time.
-
-Your files stay on your debrid account. Playback runs through your own Jellyfin
-server, so its upload bandwidth is the ceiling.
-
-## Requirements
-
-- **Jellyfin 12.** Not 10.11 and not 10.10.
-- The indexed LeLibrary library (a Postgres-backed LeLibrary instance).
-- A debrid account. TorBox is supported first; Real-Debrid, AllDebrid and
-  Premiumize follow.
-
-## Docker: set the server URL
-
-Inside the official Jellyfin container, the address Jellyfin reports for itself
-is the container's own interface, which a player cannot reach. Fill **Server
-URL** in the plugin settings with the address players use, for example
-`http://192.168.1.20:8096`. On a native install it can stay empty.
-
-The library folder also has to be a path Jellyfin can see: the default
-`/config/lelibrary` lives in the container's config volume, which is fine, but
-it is not on a media share.
-
-## Your key is on disk in plain text
-
-Jellyfin stores plugin settings as plain XML. Anyone who can read the config
-directory can read your debrid API key. That is true of every debrid plugin, and
-this one does not pretend otherwise: protect the host or the disk (file
-permissions, a dedicated machine, full-disk encryption).
-
-The same applies to your LeLibrary URL: it contains your setup secret, it is
-written into the `.nfo` files as art URLs, and anyone who can read it can read
-your library.
-
-## Building
-
-Needs the .NET 10 SDK:
-
-```bash
-dotnet build -c Release
-dotnet test
+```sh
+dotnet test -c Release
+scripts/standalone-repo.sh
 ```
 
-## Licence
-
-LeLibrary for Jellyfin is licensed under the
-[GNU General Public License v3.0](LICENSE) (GPL-3.0-only). That is the licence
-Jellyfin itself uses, and the one a plugin that links against
-`Jellyfin.Controller` is distributed under.
-
-In short: you can install it, read it and change it. If you distribute a
-modified build, you must publish your changes under the same licence, and there
-is no warranty.
+The script creates a local development repository. See
+[STANDALONE-DEV.md](STANDALONE-DEV.md) for test evidence and release limitations.
+The project is licensed under [GPL-3.0-only](LICENSE).

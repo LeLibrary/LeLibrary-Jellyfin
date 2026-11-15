@@ -200,4 +200,31 @@ public class PlaybackTests
         Assert.Equal("bytes=10-19", stub.Last!.Headers.Range!.ToString());
         await result.Body!.DisposeAsync();
     }
+
+    [Fact]
+    public async Task TorboxExpiredPresignedTokenIsReminted()
+    {
+        var provider = new FakeProvider();
+        var attempts = 0;
+        var stub = new Stub(_ => ++attempts == 1
+            ? new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = new StringContent("Invalid Presigned Token. Please get a new download link from TorBox") }
+            : Partial(10, 19, 100));
+        var proxy = new PlaybackProxy(() => provider, new LinkCache(() => provider), new HttpClient(stub));
+        var result = await proxy.OpenAsync("torbox:1:2", "bytes=10-19", null, CancellationToken.None);
+        Assert.Equal(206, result.Status);
+        Assert.Equal(2, provider.Mints);
+        Assert.Equal("bytes=10-19", stub.Last!.Headers.Range!.ToString());
+        await result.Body!.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task UnrelatedBadRequestIsNotRetried()
+    {
+        var provider = new FakeProvider();
+        var stub = new Stub(_ => new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = new StringContent("invalid range") });
+        var proxy = new PlaybackProxy(() => provider, new LinkCache(() => provider), new HttpClient(stub));
+        var result = await proxy.OpenAsync("torbox:1:2", null, null, CancellationToken.None);
+        Assert.Equal(502, result.Status);
+        Assert.Equal(1, provider.Mints);
+    }
 }

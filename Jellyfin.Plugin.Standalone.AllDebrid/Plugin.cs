@@ -52,7 +52,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         {
             new PluginPageInfo
             {
-                Name = "configPage",
+                Name = "StandaloneAllDebridConfig",
                 EmbeddedResourcePath = $"{GetType().Namespace}.Configuration.configPage.html",
             },
         };
