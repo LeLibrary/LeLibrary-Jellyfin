@@ -1,0 +1,50 @@
+name: Publish standalone repository
+
+on:
+  workflow_run:
+    workflows: ['Standalone release']
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Run containing the tested repository artifact
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'standalone-v'))
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: github-pages
+          path: downloaded
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.source_run_id || github.event.workflow_run.id }}
+      - name: Extract and validate repository
+        run: |
+          mkdir repository
+          tar -xf downloaded/artifact.tar -C repository
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          entries = json.loads(Path('repository/manifest.json').read_text())
+          expected = {'eedbc5ae-56c4-4145-9a2b-c12716963c95', '6d1185f2-1db4-4f9d-bca8-1cb24aa1fdb7', '7aa38d7a-bd3f-4b1d-81be-49f9cc1bf09d', 'd0c65588-3905-487d-989b-d0d6b601b01d', '8858565b-f937-4d4d-b081-57044455fda1'}
+          if not isinstance(entries, list) or not expected.issubset({entry.get('guid', '').lower() for entry in entries}):
+              raise SystemExit('Repository is missing a standalone or legacy plugin entry')
+          PY
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: repository
+      - id: deployment
+        uses: actions/deploy-pages@v4
