@@ -87,6 +87,29 @@ public class TorboxClientTests
     }
 
     [Fact]
+    public async Task RecoversMissingFilesFromIndividualTorrentDetails()
+    {
+        var handler = new StubHandler()
+            .Json(r => r.RequestUri!.Query.Contains("id=42"), """{"success":true,"data":{"id":42,"files":[{"id":7,"name":"movie.mkv","size":100}]}}""")
+            .Json(r => r.RequestUri!.Query.Contains("offset=0"), """{"success":true,"data":[{"id":42,"name":"Movie","files":null}]}""")
+            .Json(_ => true, """{"success":true,"data":[]}""");
+        var listing = await Client(handler).ListLibraryAsync(CancellationToken.None);
+        Assert.True(listing.IsHealthy);
+        Assert.Equal("torbox:42:7", Assert.Single(listing.Files).Key);
+    }
+
+    [Fact]
+    public async Task UnrecoverableMissingFilesNeverAuthorizeCleanup()
+    {
+        var handler = new StubHandler()
+            .Json(r => r.RequestUri!.Query.Contains("id=42"), """{"success":true,"data":{"id":42,"files":null}}""")
+            .Json(_ => true, """{"success":true,"data":[{"id":42,"files":null}]}""");
+        var listing = await Client(handler).ListLibraryAsync(CancellationToken.None);
+        Assert.False(listing.IsHealthy);
+        Assert.Empty(listing.Files);
+    }
+
+    [Fact]
     public async Task ABadKeyIsInvalidKeyAndNeverThrows()
     {
         var handler = new StubHandler().Json(_ => true, """{"success":false,"error":"BAD_TOKEN"}""", HttpStatusCode.Forbidden);

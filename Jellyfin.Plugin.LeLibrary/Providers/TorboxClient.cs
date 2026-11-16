@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -75,11 +76,12 @@ public sealed class TorboxClient : IDebridClient
                 List<(long TorrentId, string? ReleaseName, List<(long? Id, string? Name, long Size)> Files)> page;
                 try
                 {
+                    body = await RecoverMissingFilesAsync(body, cancellationToken).ConfigureAwait(false);
                     page = ReadTorrents(body);
                 }
-                catch (JsonException)
+                catch (Exception err) when (err is JsonException or HttpRequestException or TaskCanceledException or InvalidOperationException)
                 {
-                    return new ProviderListing(ProviderHealth.Unavailable, new List<DebridFile>(), "TorBox returned an incomplete or invalid listing");
+                    return new ProviderListing(ProviderHealth.Unavailable, new List<DebridFile>(), "TorBox returned an incomplete or invalid listing. One or more torrent files could not be verified; try again later.");
                 }
                 if (page.Count == 0)
                 {
@@ -111,6 +113,31 @@ public sealed class TorboxClient : IDebridClient
         }
 
         return new ProviderListing(ProviderHealth.Healthy, files, null);
+    }
+
+    private async Task<string> RecoverMissingFilesAsync(string body, CancellationToken cancellationToken)
+    {
+        var root = JsonNode.Parse(body) as JsonObject ?? throw new JsonException("Invalid listing");
+        if (root["success"]?.GetValue<bool>() != true || root["data"] is not JsonArray items)
+            throw new JsonException("Invalid listing");
+        foreach (var item in items)
+        {
+            if (item is not JsonObject torrent) throw new JsonException("Invalid torrent");
+            if (torrent["files"] is JsonArray) continue;
+            if (torrent["id"] is not JsonValue idNode || !long.TryParse(idNode.ToString(), NumberStyles.None, CultureInfo.InvariantCulture, out var id) || id < 0)
+                throw new JsonException("Invalid torrent id");
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"v1/api/torrents/mylist?bypass_cache=true&id={id.ToString(CultureInfo.InvariantCulture)}");
+            request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_apiKey}");
+            using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) throw new JsonException("Torrent detail unavailable");
+            var details = JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false)) as JsonObject;
+            if (details?["success"]?.GetValue<bool>() != true || details["data"] is not JsonObject data
+                || data["id"] is not JsonValue detailId || detailId.ToString() != id.ToString(CultureInfo.InvariantCulture)
+                || data["files"] is not JsonArray detailFiles)
+                throw new JsonException("Torrent files unavailable");
+            torrent["files"] = detailFiles.DeepClone();
+        }
+        return root.ToJsonString();
     }
 
     /// <inheritdoc />

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.11
+
+- Retry TorBox torrent details when a bulk listing omits a file list, while
+  preserving existing media if a complete listing still cannot be obtained.
+- Clarify the error when TorBox does not provide a usable listing.
+
 ## LeLibrary RD 0.0.4
 
 - Stop requesting torrent pages once Real-Debrid's reported total has been received.
