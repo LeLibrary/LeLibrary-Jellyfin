@@ -1,5 +1,11 @@
 # Changelog
 
+## LeLibrary RD 0.0.4
+
+- Stop requesting torrent pages once Real-Debrid's reported total has been received.
+- Show the request stage and HTTP status when a listing fails, without exposing account credentials.
+- Continue rejecting incomplete, overlapping or inconsistent listings.
+
 ## Provider plugins 0.0.3
 
 - Use the provider names for newly created Jellyfin libraries while reusing existing libraries by their owned paths.

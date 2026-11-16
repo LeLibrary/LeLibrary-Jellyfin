@@ -80,24 +80,25 @@ public sealed class RealDebridClient : IDebridClient
             for (var page = 1; page <= MaxPages; page++)
             {
                 using var response = await SendAsync(HttpMethod.Get, $"torrents?page={page}&limit={PageSize}", null, cancellationToken).ConfigureAwait(false);
-                if (!response.IsSuccessStatusCode) return Failed(Health(response.StatusCode));
+                if (!response.IsSuccessStatusCode) return Failed(Health(response.StatusCode), $"torrent listing returned HTTP {(int)response.StatusCode}");
                 if (response.Headers.TryGetValues("X-Total-Count", out var values))
                 {
                     if (!long.TryParse(values.FirstOrDefault(), NumberStyles.None, CultureInfo.InvariantCulture, out var countHeader)
-                        || countHeader < 0 || (expected.HasValue && expected != countHeader)) return Failed(ProviderHealth.Unavailable);
+                        || countHeader < 0 || (expected.HasValue && expected != countHeader)) return Failed(ProviderHealth.Unavailable, "torrent count changed or was invalid during pagination");
                     expected = countHeader;
                 }
                 if (response.StatusCode == HttpStatusCode.NoContent)
-                    return !expected.HasValue || expected == seen.Count ? new ProviderListing(ProviderHealth.Healthy, files, null) : Failed(ProviderHealth.Unavailable);
+                    return !expected.HasValue || expected == seen.Count ? new ProviderListing(ProviderHealth.Healthy, files, null) : Failed(ProviderHealth.Unavailable, "torrent listing ended before the reported total");
                 using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
-                if (json.RootElement.ValueKind != JsonValueKind.Array) return Failed(ProviderHealth.Unavailable);
+                if (json.RootElement.ValueKind != JsonValueKind.Array) return Failed(ProviderHealth.Unavailable, "torrent listing had an unexpected format");
                 var count = json.RootElement.GetArrayLength();
                 foreach (var torrent in json.RootElement.EnumerateArray())
                 {
                     if (torrent.ValueKind != JsonValueKind.Object || !String(torrent, "id", out var id)
                         || !String(torrent, "status", out var status) || !PlanKey.TryParse($"realdebrid:{id}:1", out _))
-                        return Failed(ProviderHealth.Unavailable);
-                    if (!seen.Add(id)) return Failed(ProviderHealth.Unavailable);
+                        return Failed(ProviderHealth.Unavailable, "a torrent entry had an invalid ID or status");
+                    if (!seen.Add(id)) return Failed(ProviderHealth.Unavailable, "torrent pages contained duplicate entries");
+                    if (expected.HasValue && seen.Count > expected.Value) return Failed(ProviderHealth.Unavailable, "torrent listing exceeded the reported total");
                     if (status != "downloaded") continue;
                     String(torrent, "filename", out var releaseName);
                     var cacheKey = CacheKey(torrent, id, releaseName);
@@ -107,10 +108,10 @@ public sealed class RealDebridClient : IDebridClient
                         continue;
                     }
                     using var detailResponse = await SendAsync(HttpMethod.Get, "torrents/info/" + Uri.EscapeDataString(id), null, cancellationToken).ConfigureAwait(false);
-                    if (!detailResponse.IsSuccessStatusCode) return Failed(Health(detailResponse.StatusCode));
+                    if (!detailResponse.IsSuccessStatusCode) return Failed(Health(detailResponse.StatusCode), $"torrent details returned HTTP {(int)detailResponse.StatusCode}");
                     using var detail = JsonDocument.Parse(await detailResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
                     var detailFiles = new List<DebridFile>();
-                    if (!ReadFiles(detail.RootElement, id, releaseName, detailFiles)) return Failed(ProviderHealth.Unavailable);
+                    if (!ReadFiles(detail.RootElement, id, releaseName, detailFiles)) return Failed(ProviderHealth.Unavailable, "torrent details had an unexpected file format");
                     files.AddRange(detailFiles);
                     if (cacheKey is not null)
                     {
@@ -119,18 +120,20 @@ public sealed class RealDebridClient : IDebridClient
                         if (FileCache.Count < 20000) FileCache[cacheKey] = new CachedFiles(DateTimeOffset.UtcNow.AddMinutes(15), detailFiles.ToArray());
                     }
                 }
+                if (expected.HasValue && seen.Count == expected.Value)
+                    return new ProviderListing(ProviderHealth.Healthy, files, null);
                 if (count == 0)
-                    return !expected.HasValue || expected == seen.Count ? new ProviderListing(ProviderHealth.Healthy, files, null) : Failed(ProviderHealth.Unavailable);
+                    return !expected.HasValue ? new ProviderListing(ProviderHealth.Healthy, files, null) : Failed(ProviderHealth.Unavailable, "torrent listing ended before the reported total");
             }
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
         {
-            return Failed(ProviderHealth.Unavailable);
+            return Failed(ProviderHealth.Unavailable, "the response could not be read or parsed");
         }
-        return Failed(ProviderHealth.Unavailable);
+        return Failed(ProviderHealth.Unavailable, "the pagination limit was reached");
     }
 
-    private static ProviderListing Failed(ProviderHealth health) => new(health, Array.Empty<DebridFile>(), "Real-Debrid did not return a complete listing");
+    private static ProviderListing Failed(ProviderHealth health, string reason) => new(health, Array.Empty<DebridFile>(), $"Real-Debrid did not return a complete listing: {reason}.");
 
     private string? CacheKey(JsonElement torrent, string id, string name)
     {

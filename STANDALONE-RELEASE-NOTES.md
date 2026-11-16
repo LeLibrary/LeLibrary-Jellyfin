@@ -1,5 +1,9 @@
 # LeLibrary provider plugins
 
+**LeLibrary RD 0.0.4:** Corrects pagination when the reported torrent total has
+already been received and adds more specific errors when a listing fails. The
+other provider plugins remain on their existing versions.
+
 Install one or more separate Jellyfin plugins for TorBox, Real-Debrid,
 AllDebrid and Premiumize. Each connects directly to its provider with your API
 key. Jellyfin handles media identification, metadata and artwork; no LeLibrary

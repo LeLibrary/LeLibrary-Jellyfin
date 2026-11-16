@@ -99,6 +99,46 @@ public class RealDebridClientTests
     }
 
     [Fact]
+    public async Task StopsAfterReceivingTheReportedTotal()
+    {
+        var calls = 0;
+        var client = Client(r =>
+        {
+            calls++;
+            if (r.RequestUri!.Query.Contains("page=2")) return Json("{}", HttpStatusCode.BadRequest);
+            var response = Json("""[{"id":"ABC","status":"downloading"}]""");
+            response.Headers.Add("X-Total-Count", "1");
+            return response;
+        });
+        var listing = await client.ListLibraryAsync(CancellationToken.None);
+        Assert.True(listing.IsHealthy);
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public async Task ListingLargerThanDeclaredTotalIsRejected()
+    {
+        var client = Client(_ =>
+        {
+            var response = Json("""[{"id":"A","status":"downloading"},{"id":"B","status":"downloading"}]""");
+            response.Headers.Add("X-Total-Count", "1");
+            return response;
+        });
+        var listing = await client.ListLibraryAsync(CancellationToken.None);
+        Assert.False(listing.IsHealthy);
+        Assert.Empty(listing.Files);
+    }
+
+    [Fact]
+    public async Task FailureReportsWhichRequestFailedWithoutCredentials()
+    {
+        var listing = await Client(_ => Json("{}", HttpStatusCode.Forbidden)).ListLibraryAsync(CancellationToken.None);
+        Assert.Equal(ProviderHealth.InvalidKey, listing.Health);
+        Assert.Contains("torrent listing returned HTTP 403", listing.Error);
+        Assert.DoesNotContain("secret", listing.Error);
+    }
+
+    [Fact]
     public async Task PlaybackSelectsTheCorrectSelectedFileBeforeUnrestricting()
     {
         string? submitted = null;

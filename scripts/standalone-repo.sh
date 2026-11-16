@@ -31,15 +31,16 @@ for code,label,guid in providers:
  if len(refs) != 1 or not re.fullmatch(r'\d+\.\d+\.\d+',refs[0] or ''):
   raise SystemExit(f'Cannot determine Jellyfin API version for {code}')
  abi=refs[0]+'.0'
+ old_versions=prior.get(guid.lower(),{}).get('versions',[])
+ if not isinstance(old_versions,list): raise SystemExit(f'Invalid version history for {code}')
+ if release and any(old.get('version') == version for old in old_versions):
+  manifest.append(prior[guid.lower()])
+  continue
  zipname=f'LeLibrary-{label}-{version}.zip'; archive=out/zipname
  with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
   z.write(project/'bin/Release/net10.0'/dll,dll)
   z.write(project/'thumb.png','thumb.png')
  digest=hashlib.md5(archive.read_bytes(),usedforsecurity=False).hexdigest()
- old_versions=prior.get(guid.lower(),{}).get('versions',[])
- if not isinstance(old_versions,list): raise SystemExit(f'Invalid version history for {code}')
- if release and any(old.get('version') == version for old in old_versions):
-  raise SystemExit(f'{code} version {version} is already published; increment it first')
  versions=[{'version':version,'changelog':('Provider plugin release; see release notes.' if release else 'Development test build.'),'targetAbi':abi,'sourceUrl':f'{base}/{zipname}','checksum':digest,'timestamp':datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}]
  versions.extend(old for old in old_versions if old.get('version') != version)
  manifest.append({'guid':guid,'name':f'LeLibrary {label}','description':f'Direct {code} connection for Jellyfin.',
